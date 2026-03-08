@@ -61,6 +61,7 @@ class GardenManager:
                             if type(p) is FloweringPlant)
             prize = sum(1 for p in self.plants if type(p) is PrizeFlower)
             return regular, flowering, prize
+
         def score(self):
             total = 0
             for p in self.plants:
@@ -82,12 +83,13 @@ class GardenManager:
         print(f"{self.owner} is helping all plants grow...")
         for plant in self.plants:
             plant.grow()
-    
+
     def validate_height(self):
         for plant in self.plants:
             if plant.height > 115 or plant.height < 0:
                 return False
         return True
+
     def report(self):
         print(f"\n=== {self.owner}'s Garden Report ===")
         print(f"Plants in garden:")
@@ -104,21 +106,15 @@ class GardenManager:
             print(f" - {manager.owner}: {score}")
         print(f"Total gardens managed: {len(GardenManager.all_gardens)}")
 
-
-# === Main ===
 print("=== Garden Management System Demo ===\n")
-
 alice_garden = GardenManager("Alice")
 bob_garden = GardenManager("Bob")
-
 oak = Plant("Oak Tree", 100, 365)
 rose = FloweringPlant("Rose", 25, 30, "red")
 sunflower = PrizeFlower("Sunflower", 50, 45, "yellow", 10)
-
 alice_garden.add_plant(oak)
 alice_garden.add_plant(rose)
 alice_garden.add_plant(sunflower)
-
 tulip = FloweringPlant("Tulip", 30, 20, "pink")
 bamboo = Plant("Bamboo", 60, 180)
 bob_garden.add_plant(tulip)
@@ -127,8 +123,6 @@ bob_garden.add_plant(bamboo)
 print("hi")
 alice_garden.grow_help()
 bob_garden.grow_help()
-
 alice_garden.report()
 bob_garden.report()
-
 print(f"\nHeight validation test: {alice_garden.validate_height()}")

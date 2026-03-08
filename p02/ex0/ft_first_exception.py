@@ -15,14 +15,15 @@ def check_temperature(temp_str):
 
 
 def test_temperature():
-    print(f"\nTesting temperature: 25")
+    print("\nTesting temperature: 25")
     check_temperature("25")
-    print(f"\nTesting temperature: abc")
+    print("\nTesting temperature: abc")
     check_temperature("abc")
-    print(f"\nTesting temperature: -50")
+    print("\nTesting temperature: -50")
     check_temperature("-50")
-    print(f"\nTesting temperature: 100")
+    print("\nTesting temperature: 100")
     check_temperature("100")
+
 
 if __name__ == "__main__":
     print("=== Garden Temperature Checker ===")

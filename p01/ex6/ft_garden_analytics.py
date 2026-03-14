@@ -92,19 +92,21 @@ class GardenManager:
 
     def report(self):
         print(f"\n=== {self.owner}'s Garden Report ===")
-        print(f"Plants in garden:")
+        print("Plants in garden:")
         for plant in self.plants:
             print(f" - {plant.print_info()}")
         stats = GardenManager.GardenStats(self.plants)
         regular, flowering, prize = stats.count_by_type()
         print(f"High validation test: {self.validate_height()}")
-#        print(f"Garden scores - {', '.join(f'{manager.owner}: {GardenManager.GardenStats(manager.plants).score()}' 
-#                                           for manager in GardenManager.all_gardens)}")
-        print(f"Garden scores -")
+#        print(f"Garden scores - {', '.
+# join(f'{manager.owner}: {GardenManager.GardenStats(manager.plants).score()}'
+# for manager in GardenManager.all_gardens)}")
+        print("Garden scores -")
         for manager in GardenManager.all_gardens:
             score = GardenManager.GardenStats(manager.plants).score()
             print(f" - {manager.owner}: {score}")
         print(f"Total gardens managed: {len(GardenManager.all_gardens)}")
+
 
 print("=== Garden Management System Demo ===\n")
 alice_garden = GardenManager("Alice")

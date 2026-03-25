@@ -1,47 +1,33 @@
-class GardenError(Exception):
-    pass
+def garden_operations(operation_number: int) -> None:
+    if operation_number == 0:
+        int("abc")
+    elif operation_number == 1:
+        result = 1 / 0
+        print(result)
+    elif operation_number == 2:
+        open("/non/existent/file")
+    elif operation_number == 3:
+        "hello" + 5
+    else:
+        print("Operation completed successfully")
 
 
-class PlantError(GardenError):
-    pass
-
-
-class WaterError(GardenError):
-    pass
-
-
-def test_garden_error():
-    try:
-        # input_value = input("Enter the plant name: ")
-        # raise GardenError(f"The {input_value} plant is wilting!")
-        raise GardenError("The tomato plant is wilting!")
-    except GardenError as e:
-        print(f"Caught a garden error: {e}")
-        e = "Not enough water in the tank!"
-        print(f"Caught a garden error: {e}")
-
-
-def test_plant_error():
-    try:
-        raise PlantError("The tomato plant is wilting!")
-    except PlantError as e:
-        print(f"Caught PlantError: {e}")
-
-
-def test_water_error():
-    try:
-        # input_value = int(input("Enter the water level"))
-        raise WaterError("Not enough water in the tank!")
-    except WaterError as e:
-        print(f"Caught WaterError: {e}")
+def test_error_types() -> None:
+    print("=== Garden Error Types Demo ===")
+    for i in range(5):
+        print(f"Testing operation {i}...")
+        try:
+            garden_operations(i)
+        except ValueError as e:
+            print(f"Caught ValueError: {e}")
+        except ZeroDivisionError as e:
+            print(f"Caught ZeroDivisionError: {e}")
+        except FileNotFoundError as e:
+            print(f"Caught FileNotFoundError: {e}")
+        except TypeError as e:
+            print(f"Caught TypeError: {e}")
+    print("\nAll error types tested successfully!")
 
 
 if __name__ == "__main__":
-    print("=== Custom Garden Errors Demo ===")
-    print("\nTesting PlantError...")
-    test_plant_error()
-    print("\nTesting WaterError...")
-    test_water_error()
-    print("\nTesting catching all garden errors...")
-    test_garden_error()
-    print("\nAll custom error types work correctly!", end='')
+    test_error_types()

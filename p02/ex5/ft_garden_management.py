@@ -7,18 +7,20 @@ class GardenError(Exception):
 #     except GardenError as e:
 #         print(f"Caught GardenError: {e}")
 
+
 class Plant:
-    def __init__(self, name : str, water_level : int,
-                 sunlight_hours : int) -> None:
+    def __init__(self, name: str, water_level: int,
+                 sunlight_hours: int) -> None:
         try:
             if not name:
                 raise ValueError("Plant name cannot be empty")
             if water_level > 10:
-                raise ValueError(
-                f"Water level {water_level} is too high (max 10)")
+                raise ValueError(f"Water level {water_level}"
+                        +"is too high (max 10)")
             if water_level < 1:
                 raise ValueError(
-                f"Water level {water_level} is too low (min 1)")
+                f"Water level {water_level}"
+                +"is too low (min 1)")
             if sunlight_hours > 12:
                 raise ValueError(
                 f"Sunlight hours {sunlight_hours} is too high (max 12)")
@@ -46,7 +48,8 @@ class GardenManager:
             print(f"Added {plant.name} successfully!")
         except ValueError as e:
             print(f"Error adding plant: {e}")
-    
+
+
     def water_plants(self) -> None:
         print("Opening watering system")
         try:
@@ -56,7 +59,8 @@ class GardenManager:
             print(f"Error watering plants: {e}")
         finally:
             print("Closing watering system (cleanup)")
-    
+
+
     def check_plants_health(self) -> None:
         print("Checking plant health...")
         try:
@@ -81,6 +85,7 @@ class GardenManager:
         except ValueError as e:
             print(f"Error checking plant health: {e}")
 
+
     def test_error_recovery(self) -> None:
         try:
             if self.tank < 1:
@@ -89,7 +94,8 @@ class GardenManager:
             print(f"Caught GardenError: {e}")
         finally:
             print("System recovered and continuing...")
-        
+
+
 def test_garden_management() -> None:
     print("=== Garden Management System ===")
     manager = GardenManager()

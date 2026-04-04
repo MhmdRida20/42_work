@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 def water_plants(plant_list):
     print("Opening watering system")
     plants = ["tomato", "lettuce", "carrots"]
@@ -24,5 +26,6 @@ def test_watering_system():
         water_plants(plants)
     finally:
         print("\nCleanup always happens, even with errors!")
+
 
 test_watering_system()

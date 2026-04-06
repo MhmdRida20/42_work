@@ -1,5 +1,4 @@
 # !/usr/bin/env python3
-# Authorized: import math, math.sqrt(), input(), round(), print()
 
 import math
 

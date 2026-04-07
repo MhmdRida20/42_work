@@ -1,65 +1,104 @@
+#!/usr/bin/env python3
+
 class Plant:
-    def __init__(self, name, height, age):
+    def __init__(self, name: str, height: float, age: int) -> None:
         self.name = name
         self.height = height
         self.age = age
 
-    def print_info(self):
-        return f"{self.name}"
+    def show(self) -> str:
+        return f"{self.name}: {self.height:.1f}cm, {self.age} days old"
+
+    def grow(self, length: float = 10.0) -> None:
+        self.height += length
+
+    def age_plant(self, days: int = 1) -> None:
+        self.age += days
 
 
 class Flower(Plant):
-    def __init__(self, name, height, age, color):
+    def __init__(self, name: str, height: float, age: int, color: str) -> None:
         super().__init__(name, height, age)
         self.color = color
+        self.is_blooming = False
 
-    def print_info(self):
-        return super().print_info() + " (Flower): " \
-         f"{self.height}cm, {self.age} days, {self.color} color" \
-         f"\n{self.bloom()}"
+    def show(self) -> str:
+        base_info = super().show()
+        if not self.is_blooming:
+            bloom_status = "has not bloomed yet"
+        else:
+            bloom_status = "is blooming beautifully!"
+        return f"{base_info}\nColor: {self.color}\n{self.name} {bloom_status}"
 
-    def bloom(self):
-        return f"{self.name} is blooming beautifully!"
+    def bloom(self) -> None:
+        self.is_blooming = True
 
 
 class Tree(Plant):
-    def __init__(self, name, height, age, diameter):
+    def __init__(self, name: str, height: float, age: int,
+                 trunk_diameter: float) -> None:
         super().__init__(name, height, age)
-        self.diameter = diameter
+        self.trunk_diameter = trunk_diameter
 
-    def print_info(self):
-        return super().print_info() + " (Tree): " \
-         f"{self.height}cm, {self.age} days, {self.diameter}cm diameter" \
-         f"\n{self.produce_shade()}"
+    def show(self) -> str:
+        base_info = super().show()
+        return f"=== Tree\n{base_info}\n" \
+               f"Trunk diameter: {self.trunk_diameter}cm"
 
-    def produce_shade(self):
-        volume = 3.14 * (self.diameter / 2) ** 2 * (self.height / 100)
-        return f"{self.name} provides {int(volume)} square meters of shade."
+    def produce_shade(self) -> str:
+        shade_length = self.height
+        shade_width = self.trunk_diameter
+        return f"Tree {self.name} now produces a shade of {shade_length}" \
+               f"cm long and {shade_width}cm wide."
 
 
 class Vegetable(Plant):
-    def __init__(self, name, height, age, harvest_season, nutritional_value):
+    def __init__(self, name: str, height: float,
+                 age: int, harvest_season: str) -> None:
         super().__init__(name, height, age)
         self.harvest_season = harvest_season
-        self.nutritional_value = nutritional_value
+        self.nutritional_value = 0
 
-    def print_info(self):
-        return super().print_info() + " (Vegetable): " \
-         f"{self.height}cm, {self.age} days, {self.harvest_season} harvest" \
-         f"\n{self.show_nutritional_value()}"
+    def show(self) -> str:
+        base_info = super().show()
+        return f"{base_info}\nHarvest season: {self.harvest_season}\n" \
+               f"Nutritional value: {self.nutritional_value}"
 
-    def show_nutritional_value(self):
-        return f"{self.name} is rich in {self.nutritional_value}."
+    def grow(self, length: float = 10.0) -> None:
+        super().grow(length)
+
+    def age_plant(self, days: int = 1) -> None:
+        super().age_plant(days)
+        self.nutritional_value += days
 
 
 if __name__ == "__main__":
     print("=== Garden Plant Types ===")
-    rose = Flower("Rose", 25, 30, "red")
-    tulip = Flower("Tulip", 20, 25, "yellow")
-    oak = Tree("Oak", 500, 1825, 50)
-    pine = Tree("Pine", 400, 1500, 40)
-    tomato = Vegetable("Tomato", 80, 90, "summer", "vitamin C")
-    carrot = Vegetable("Carrot", 30, 70, "spring", "vitamin A")
-    plants = [rose, tulip, oak, pine, tomato, carrot]
-    for plant in plants:
-        print(plant.print_info())
+
+    # Flower
+    print("=== Flower")
+    rose = Flower("Rose", 15.0, 10, "red")
+    print(rose.show())
+    print("[asking the rose to bloom]")
+    rose.bloom()
+    print(rose.show())
+
+    print()
+
+    # Tree
+    oak = Tree("Oak", 200.0, 365, 5.0)
+    print(oak.show())
+    print("[asking the oak to produce shade]")
+    print(oak.produce_shade())
+
+    print()
+
+    # Vegetable
+    print("=== Vegetable")
+    tomato = Vegetable("Tomato", 5.0, 10, "April")
+    print(tomato.show())
+    print("[make tomato grow and age for 20 days]")
+    for _ in range(20):
+        tomato.grow(2.1)
+        tomato.age_plant()
+    print(tomato.show())

@@ -36,4 +36,4 @@ else:
         print(f"Score range: {score_range}")
     else:
         print("No scores provided. Usage: python3"
-        + " ft_score_analytics.py <score1> <score2> ...")
+              " ft_score_analytics.py <score1> <score2> ...")

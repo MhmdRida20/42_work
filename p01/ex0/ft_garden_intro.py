@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-def test():
+def test() -> None:
     print("=== Welcome to My Garden ===")
     name, height, age = "Rose", "25cm", "30 days"
     print("Plant: ", name)

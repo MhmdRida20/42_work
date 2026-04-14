@@ -1,31 +1,29 @@
 #!/usr/bin/env python3
 
-def water_plants(plant_list):
-    print("Opening watering system")
-    plants = ["tomato", "lettuce", "carrots"]
+class PlantError(Exception):
+    pass
+
+
+def water_plant(plant_name: str) -> None:
+    if plant_name != plant_name.capitalize():
+        raise PlantError(f"Invalid plant name to water: '{plant_name}'")
+    print(f"Watering {plant_name}: [OK]")
+
+
+def test_watering_system() -> None:
+    test_plants = ["Tomato", "Lettuce", "Carrots", "lettuce"]
+    print("=== Garden Watering System ===")
+
     try:
-        for plant in plant_list:
-            if plant not in plants:
-                raise ValueError(f"Invalid plant name: '{plant}'")
-            print(f"Watering {plant}: [OK]")
-    except ValueError as e:
+        print("Opening watering system")
+        for plant in test_plants:
+            water_plant(plant)
+    except PlantError as e:
         print(f"Caught PlantError: {e}")
         print(".. ending tests and returning to main")
     finally:
         print("Closing watering system")
 
 
-def test_watering_system():
-    try:
-        print("=== Garden Watering System ===")
-        plants = ["tomato", "lettuce", "carrots"]
-        print("\nTesting valid plants...")
-        water_plants(plants)
-        print("\nTesting invalid plants...")
-        plants = ["tomato", 123]
-        water_plants(plants)
-    finally:
-        print("\nCleanup always happens, even with errors!")
-
-
-test_watering_system()
+if __name__ == "__main__":
+    test_watering_system()

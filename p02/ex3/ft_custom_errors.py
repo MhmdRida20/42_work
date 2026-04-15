@@ -12,7 +12,7 @@ class WaterError(GardenError):
     pass
 
 
-def test_garden_error():
+def test_garden_error() -> None:
     try:
         raise GardenError("The tomato plant is wilting!")
     except GardenError as e:
@@ -21,14 +21,14 @@ def test_garden_error():
         print(f"Caught a garden error: {e}")
 
 
-def test_plant_error():
+def test_plant_error() -> None:
     try:
         raise PlantError("The tomato plant is wilting!")
     except PlantError as e:
         print(f"Caught PlantError: {e}")
 
 
-def test_water_error():
+def test_water_error() -> None:
     try:
         raise WaterError("Not enough water in the tank!")
     except WaterError as e:

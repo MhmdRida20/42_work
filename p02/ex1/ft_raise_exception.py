@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-def input_temperature(temp_str) -> int | None:
+def input_temperature(temp_str: str) -> int | None:
     try:
         temp = int(temp_str)
         if not (-1 < temp < 41):

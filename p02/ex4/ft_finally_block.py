@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-def water_plants(plant_list):
+def water_plants(plant_list: list[str]) -> None:
     print("Opening watering system")
     plants = ["tomato", "lettuce", "carrots"]
     try:
@@ -15,7 +15,7 @@ def water_plants(plant_list):
         print("Closing watering system")
 
 
-def test_watering_system():
+def test_watering_system() -> None:
     try:
         print("=== Garden Watering System ===")
         plants = ["tomato", "lettuce", "carrots"]

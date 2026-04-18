@@ -14,8 +14,8 @@ def get_player_pos() -> tuple:
         y = float(tuple_string[1])
         z = float(tuple_string[2])
         player_pos = (x, y, z)
-    except ValueError:
-        print("Invalid syntax")
+    except ValueError as e:
+        print(f"Error on parameter '{tuple_string[e.args[0]]}': could not convert string to float: '{tuple_string[e.args[0]]}'")
         return None
     return player_pos
 

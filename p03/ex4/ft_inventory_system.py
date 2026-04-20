@@ -25,9 +25,19 @@ def ft_inventory_system():
                       f"literal for int() with base 10: '{quantity}'")
     print("Got inventory: {", end="")
     for item, quantity in inventory.items():
-        print(f" {item}: {quantity}", end=", " 
+        print(f" {item}: {quantity}", end=", "
               if item != list(inventory.keys())[-1] else "")
     print("}")
+    item_list = list(inventory.keys())
+    print(f"Item list: {item_list}")
+
+    print(f"Total quantity of the {len(inventory)}"
+          f" items: {sum(inventory.values())}")
+    for item in inventory.keys():
+        print(f"Item {item} represents "
+              f"{round((inventory[item] / sum(inventory.values())) * 100,1)}%")
+    print(f"Item most abundant: ")
+
 
 if __name__ == "__main__":
     ft_inventory_system()

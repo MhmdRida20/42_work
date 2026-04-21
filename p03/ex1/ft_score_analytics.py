@@ -8,7 +8,7 @@ if not checking_list or len(checking_list) == 0:
     print("No scores provided. Usage: python3 "
           "ft_score_analytics.py <score1> <score2> ...")
 else:
-    filtered_list : list = []
+    filtered_list: list = []
     index = 0
     for score in checking_list:
         try:

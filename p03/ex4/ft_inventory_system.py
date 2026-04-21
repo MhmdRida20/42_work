@@ -35,8 +35,13 @@ def ft_inventory_system():
           f" items: {sum(inventory.values())}")
     for item in inventory.keys():
         print(f"Item {item} represents "
-              f"{round((inventory[item] / sum(inventory.values())) * 100,1)}%")
-    print(f"Item most abundant: ")
+              f"{round((inventory[item] / sum(inventory.values())) * 100)}%")
+    print(f"Item most abundant: {max(inventory, key=inventory.get)} "
+          f"with quantity {max(inventory.values())}")
+    print(f"Item least abundant: {min(inventory, key= inventory.get)} "
+          f"with quantity {min(inventory.values())}")
+    inventory.update({'magic_item': 1})
+    print("Updated inventory: ", inventory)
 
 
 if __name__ == "__main__":

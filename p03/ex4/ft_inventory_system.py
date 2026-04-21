@@ -1,7 +1,5 @@
+#!/usr/bin/env python3
 import sys
-
-# Authorized: import sys, sys.argv, len(), print(), sum(), list(), round(),
-# dict.keys(), dict.values(),` dict.update()`
 
 
 def ft_inventory_system():

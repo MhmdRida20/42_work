@@ -3,19 +3,19 @@
 import math
 
 
-def get_player_pos() -> tuple:
+def get_player_pos() -> tuple | None:
     tuple_string = input("Enter new coordinates as floats in format 'x,y,z': ")
-    tuple_string = tuple_string.split(",")
-    if len(tuple_string) != 3:
+    tuple_float = tuple_string.split(",")
+    if len(tuple_float) != 3:
         print("Invalid syntax")
         return None
     try:
-        x = float(tuple_string[0])
-        y = float(tuple_string[1])
-        z = float(tuple_string[2])
+        x = float(tuple_float[0])
+        y = float(tuple_float[1])
+        z = float(tuple_float[2])
         player_pos = (x, y, z)
     except ValueError as e:
-        print(f"Error on parameter '{tuple_string[e.args[0]]}':"
+        print(f"Error on parameter '{tuple_float[e.args[0]]}':"
               " could not convert string to float: "
               "'{tuple_string[e.args[0]]}'")
         return None

@@ -1,8 +1,10 @@
+#!/usr/bin/env python3
+
 import typing
 import random
 
 
-def gen_event() -> tuple:
+def gen_event() -> typing.Generator:
     players = ["Alice", "Bob", "Charlie", "Dylan"]
     events = ["run", "eat", "sleep", "grab",
               "move", "climb", "swim", "release"]

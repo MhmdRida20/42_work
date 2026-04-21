@@ -8,12 +8,12 @@ if not checking_list or len(checking_list) == 0:
     print("No scores provided. Usage: python3 "
           "ft_score_analytics.py <score1> <score2> ...")
 else:
-    filtered_list = []
+    filtered_list : list = []
     index = 0
     for score in checking_list:
         try:
-            score = int(score)
-            filtered_list = filtered_list + [score]
+            score_value = int(score)
+            filtered_list.append(score_value)
         except ValueError:
             print(f"Invalid parameter: '{score}'")
     if filtered_list:

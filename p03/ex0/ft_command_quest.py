@@ -1,4 +1,4 @@
-# bin/bash/env python3
+#!/usr/bin/env python3
 
 import sys
 
@@ -17,4 +17,4 @@ else:
     for arg in sys.argv[1:]:
         print(f"Argument {i}: {arg}")
         i += 1
-    print(f"Total arguments: {total_args}\n")
+    print(f"Total arguments: {total_args}")

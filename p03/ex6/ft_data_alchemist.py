@@ -19,7 +19,3 @@ def ft_data_alchemist():
                    for name, score in score_dict.items()
                    if score > average_score}
     print("High scores: ", high_scores)
-
-
-if __name__ == "__main__":
-    ft_data_alchemist()

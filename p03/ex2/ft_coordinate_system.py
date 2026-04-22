@@ -10,14 +10,18 @@ def get_player_pos() -> tuple | None:
         print("Invalid syntax")
         return None
     try:
-        x = float(tuple_float[0])
-        y = float(tuple_float[1])
-        z = float(tuple_float[2])
+        x, y, z = 0.0, 0.0, 0.0
+        i = 0
+        x = float(tuple_float[i])
+        i += 1
+        y = float(tuple_float[i])
+        i += 1
+        z = float(tuple_float[i])
         player_pos = (x, y, z)
-    except ValueError as e:
-        print(f"Error on parameter '{tuple_float[e.args[0]]}':"
+    except ValueError:
+        print(f"Error on parameter '{tuple_float[i]}':"
               " could not convert string to float: "
-              "'{tuple_string[e.args[0]]}'")
+              f"'{tuple_float[i]}'")
         return None
     return player_pos
 
@@ -30,7 +34,7 @@ def calculate_distance(player_pos: tuple, center_pos:
     return distance_to_center
 
 
-if __name__ == "__main__":
+def print_coordinates():
     print("=== Game Coordinate System ===\n")
     print("Get a first set of coordinates")
     player_pos = None
@@ -41,10 +45,10 @@ if __name__ == "__main__":
                   + f"It includes: X={player_pos[0]}, "
                   + f"Y={player_pos[1]}, Z={player_pos[2]}")
             distance = calculate_distance(player_pos, (0, 0, 0))
-    print(f"Distance to center: {distance:.4f}")
+    print(f"Distance to center: {distance:.4f}\n")
     print("Get a second set of coordinates")
     other_pos = None
-    while other_pos is None:
+    while other_pos is None and player_pos is not None:
         other_pos = get_player_pos()
         if other_pos is not None:
             distance = calculate_distance(other_pos, player_pos)

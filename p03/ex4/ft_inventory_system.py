@@ -6,6 +6,7 @@ def ft_inventory_system():
     if len(sys.argv) < 2:
         print("Usage: python ft_inventory_system.py <item1> <item2> ...")
         return
+    print("=== Inventory System Analysis ===")
     inventory = {}
     number_added = 0
     for item in sys.argv[1:]:
@@ -16,6 +17,8 @@ def ft_inventory_system():
         else:
             try:
                 name, quantity = item.split(":")
+                if name in inventory:
+                    print(f"Redundant item '{name}' - discarding")
                 inventory[name] = inventory.get(name, int(quantity))
                 number_added += 1
             except ValueError:
@@ -40,7 +43,3 @@ def ft_inventory_system():
           f"with quantity {min(inventory.values())}")
     inventory.update({'magic_item': 1})
     print("Updated inventory: ", inventory)
-
-
-if __name__ == "__main__":
-    ft_inventory_system()

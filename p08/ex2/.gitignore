@@ -1,0 +1,22 @@
+# Virtual environments
+matrix_env/
+venv/
+.venv/
+env/
+
+# Environment secrets
+.env
+.env.example
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.mypy_cache/
+
+# Output files
+matrix_analysis.png
+
+# Poetry
+poetry.lock

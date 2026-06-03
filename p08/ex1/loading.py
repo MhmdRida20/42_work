@@ -1,4 +1,4 @@
-import pandas # type: ignore
+import pandas  # type: ignore
 import numpy
 import sys
 from importlib import import_module, metadata

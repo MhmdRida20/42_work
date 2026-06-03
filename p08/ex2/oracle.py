@@ -5,7 +5,7 @@ import sys
 def load_dotenv_if_available() -> bool:
     """Load .env file using python-dotenv if the library is present."""
     try:
-        from dotenv import load_dotenv # type: ignore
+        from dotenv import load_dotenv  # type: ignore
         load_dotenv(override=False)   # env vars already set take priority
         return True
     except ImportError:

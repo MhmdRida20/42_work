@@ -1,0 +1,7 @@
+# Development / tooling
+flake8
+mypy
+pytest
+
+# Optional: only needed for the graphical visualization (bonus polish).
+# matplotlib

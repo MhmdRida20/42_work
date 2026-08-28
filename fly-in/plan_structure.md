@@ -69,27 +69,32 @@ Work top to bottom. Keep `make lint` and `make test` green after every checked
 step — each one should end in something observable, not just code that
 compiles. Don't start a step until the previous one is verified.
 
-- [ ] **Step 1 — Zones & factory** (`models/zone.py`)
-  - [ ] Implement `ZoneFactory.build()`: look up `zone_type` in `_TYPES`, raise `ParseError` on an unknown type.
-  - [ ] Verify: unit test that `build("restricted", …).entry_cost == 2` and `build("bogus", …)` raises.
+- [x] **Step 1 — Zones & factory** (`models/zone.py`)
+  - [x] Implement `ZoneFactory.build()`: look up `zone_type` in `_TYPES`, raise `ParseError` on an unknown type.
+  - [x] Verify: unit test that `build("restricted", …).entry_cost == 2` and `build("bogus", …)` raises.
 
-- [ ] **Step 2 — Network wiring** (`models/network.py`, `models/connection.py`)
-  - [ ] Implement `add_zone` (reject duplicate names, reject a second start/end).
-  - [ ] Implement `add_connection` (both zones must exist, reject `a-b`/`b-a` duplicates and self-loops).
-  - [ ] Implement `Connection.can_traverse()`.
-  - [ ] Verify: build a tiny network by hand in a test, check `neighbors()`.
+- [x] **Step 2 — Network wiring** (`models/network.py`, `models/connection.py`)
+  - [x] Implement `add_zone` (reject duplicate names, reject a second start/end).
+  - [x] Implement `add_connection` (both zones must exist, reject `a-b`/`b-a` duplicates and self-loops).
+  - [x] Implement `Connection.can_traverse()`.
+  - [x] Verify: build a tiny network by hand in a test, check `neighbors()`.
 
-- [ ] **Step 3 — Parser** (`parsing/parser.py`) — first big milestone
-  - [ ] Implement `_parse_metadata()` for `[key=value ...]` blocks.
-  - [ ] Implement `parse_lines()`: `nb_drones:` first, then zone lines (via `ZoneFactory`), then `connection:` lines; ignore `#`/blank lines; enforce exactly one start and one end; attach the line number to every error.
-  - [ ] Verify: `python main.py maps/example.map` parses without error (temporarily print zone/connection counts in `main.py`).
-  - [ ] Write your own bad maps (missing start, duplicate connection, capacity 0, bad zone type, self-loop, disconnected end) and confirm each raises a clean, line-tagged `ParseError`.
+- [x] **Step 3 — Parser** (`parsing/parser.py`) — first big milestone
+  - [x] Implement `_parse_metadata()` for `[key=value ...]` blocks.
+  - [x] Implement `parse_lines()`: `nb_drones:` first, then zone lines (via `ZoneFactory`), then `connection:` lines; ignore `#`/blank lines; enforce exactly one start and one end; attach the line number to every error.
+  - [x] Verify: `python main.py maps/example.map` parses without error (temporarily print zone/connection counts in `main.py`).
+  - [x] Write your own bad maps (missing start, duplicate connection, capacity 0, bad zone type, self-loop, disconnected end) and confirm each raises a clean, line-tagged `ParseError`.
+  - Fixed along the way: `StartZone`/`EndZone` subclasses couldn't actually be produced by the parser (it only builds zones from the `zone=` tag). Replaced with an `unlimited: bool` flag on the base `Zone`, set by the parser when the line keyword is `start_hub`/`end_hub`. This also correctly allows a start/end zone to carry a real entry-cost type if ever tagged one.
+  - Fixed along the way: `mypy .` was crashing on a stray global `numpy` install pulled in transitively via `pytest`'s optional `TYPE_CHECKING` import (`numpy` is not a project dependency). Added an isolated `.venv/` (gitignored) with only flake8/mypy/pytest — run tooling through it, e.g. `./.venv/Scripts/python.exe -m pytest -q`.
 
-- [ ] **Step 4 — BFS single path + minimal simulator**
-  - [ ] `BFSFlowFinder._bfs()` returning one shortest path.
-  - [ ] Trivial `Scheduler.assign()` putting every drone on that one path.
-  - [ ] `Simulator.step()`/`run()` for the no-conflict case (no capacity contention).
-  - [ ] Verify: a linear map with 2 drones produces valid `D1-… D2-…` turn lines matching the required output format.
+- [x] **Step 4 — BFS single path + minimal simulator**
+  - [x] `BFSFlowFinder._bfs()` returning one shortest path.
+  - [x] Trivial `Scheduler.assign()` putting every drone on that one path.
+  - [x] `Simulator.step()`/`run()` for the no-conflict case (no capacity contention).
+  - [x] Verify: `maps/easy_linear.map` (2 drones, linear chain) produces the exact expected `D1-… D2-…` schedule in 6 turns, matching the subject's benchmark target.
+  - Design change along the way: `Drone.step()` (self-contained per-drone advance) doesn't fit the turn model — the simulator needs a *global* view of every drone's intended move before it can validate capacity (leavers must free a zone before entrants into it are checked, across *all* drones at once, in the same turn). Replaced with `Drone.next_zone` (peek) + `Drone.advance()` (commit), orchestrated by `Simulator.step()`.
+  - Known, intentional gap until Step 5: restricted-zone multi-turn transit is not yet implemented — a move into a `RestrictedZone` is currently (incorrectly) treated as an instant 1-turn move. Confirmed by running `main.py` on `maps/example.map`, whose BFS path passes through `roof1` (restricted). `maps/easy_linear.map` avoids this by using only normal zones, so it validates Step 4 in isolation.
+  - `main.py` is now fully wired end-to-end (parse → find path → assign → simulate → print lines); only the visualizer hookup remains commented out for Step 6.
 
 - [ ] **Step 5 — Multi-path + full turn rules** — the correctness milestone
   - [ ] `BFSFlowFinder.find_paths()`: multiple edge-disjoint paths via repeated augmentation.

@@ -2,7 +2,8 @@
 
 Each concrete zone knows its movement cost and whether it is
 accessible. Start and end zones are special: they have unlimited
-capacity. A :class:`ZoneFactory` turns a parsed ``zone=<type>``
+capacity regardless of their zone type, via the ``unlimited`` flag on
+:class:`Zone`. A :class:`ZoneFactory` turns a parsed ``zone=<type>``
 string into the matching subclass.
 """
 
@@ -10,6 +11,8 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
+
+from parsing.errors import ParseError
 
 if TYPE_CHECKING:
     from models.drone import Drone
@@ -25,6 +28,7 @@ class Zone(ABC):
         y: int,
         color: str | None = None,
         max_drones: int = 1,
+        unlimited: bool = False,
     ) -> None:
         """Store zone metadata.
 
@@ -34,12 +38,15 @@ class Zone(ABC):
             y: Integer y coordinate.
             color: Optional color tag used for visualization.
             max_drones: Max simultaneous occupants (default 1).
+            unlimited: True for the start/end zones, which may hold
+                any number of drones regardless of ``max_drones``.
         """
         self.name = name
         self.x = x
         self.y = y
         self.color = color
         self.max_drones = max_drones
+        self.unlimited = unlimited
         self.occupants: list[Drone] = []
 
     @property
@@ -55,7 +62,7 @@ class Zone(ABC):
 
     def has_capacity(self) -> bool:
         """Return True if another drone may enter this turn."""
-        return len(self.occupants) < self.max_drones
+        return self.unlimited or len(self.occupants) < self.max_drones
 
     def __repr__(self) -> str:
         """Return a short debug representation."""
@@ -103,22 +110,6 @@ class BlockedZone(Zone):
         return False
 
 
-class StartZone(NormalZone):
-    """Unique start zone: unlimited capacity for all drones."""
-
-    def has_capacity(self) -> bool:
-        """The start zone can always hold more drones."""
-        return True
-
-
-class EndZone(NormalZone):
-    """Unique end zone: unlimited capacity; arrivals are delivered."""
-
-    def has_capacity(self) -> bool:
-        """The end zone can always accept more drones."""
-        return True
-
-
 class ZoneFactory:
     """Build the correct :class:`Zone` subclass from a type string."""
 
@@ -137,6 +128,7 @@ class ZoneFactory:
         y: int,
         color: str | None = None,
         max_drones: int = 1,
+        unlimited: bool = False,
     ) -> Zone:
         """Create a zone of the given type.
 
@@ -148,6 +140,8 @@ class ZoneFactory:
             y: Integer y coordinate.
             color: Optional color tag.
             max_drones: Max simultaneous occupants.
+            unlimited: True for the start/end zones (see
+                :attr:`Zone.unlimited`).
 
         Returns:
             The constructed zone.
@@ -155,6 +149,10 @@ class ZoneFactory:
         Raises:
             ParseError: If ``zone_type`` is not a known type.
         """
-        # TODO: look up ``zone_type`` in ``_TYPES``, validate it, and
-        # return the constructed zone. Raise ParseError on unknown type.
-        raise NotImplementedError
+        zone_cls = self._TYPES.get(zone_type)
+        if zone_cls is None:
+            known = ", ".join(sorted(self._TYPES))
+            raise ParseError(
+                f"unknown zone type {zone_type!r} (expected one of: {known})"
+            )
+        return zone_cls(name, x, y, color, max_drones, unlimited)

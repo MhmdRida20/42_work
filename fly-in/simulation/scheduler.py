@@ -11,10 +11,16 @@ from __future__ import annotations
 from models.drone import Drone
 from models.network import Network
 from models.zone import Zone
+from parsing.errors import NoPathError
 
 
 class Scheduler:
-    """Distribute drones across paths to minimise total turns."""
+    """Distribute drones across paths to minimise total turns.
+
+    For now every drone is assigned to the single path found by the
+    baseline BFS finder (balancing across multiple paths is added in a
+    later milestone).
+    """
 
     def assign(
         self,
@@ -31,11 +37,19 @@ class Scheduler:
 
         Returns:
             The list of drones, each with ``path`` populated.
+
+        Raises:
+            NoPathError: If no candidate path was supplied.
         """
-        # TODO: greedily assign each drone to the path that currently
-        # finishes earliest (path length + queue position), balancing
-        # the makespan across the chosen paths.
-        raise NotImplementedError
+        if not paths:
+            raise NoPathError("no paths available to assign drones to")
+
+        path = paths[0]
+        drones = [Drone(i, network.start) for i in range(1, nb_drones + 1)]
+        for drone in drones:
+            drone.path = path
+            network.start.occupants.append(drone)
+        return drones
 
     @staticmethod
     def path_cost(path: list[Zone]) -> int:
@@ -47,5 +61,4 @@ class Scheduler:
         Returns:
             The sum of ``entry_cost`` over every zone entered.
         """
-        # TODO: sum entry_cost for each zone after the start.
-        raise NotImplementedError
+        return sum(zone.entry_cost for zone in path[1:])

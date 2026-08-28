@@ -1,27 +1,36 @@
-"""Smoke tests: verify the skeleton imports and wires together.
+"""Smoke tests: verify every package still imports cleanly.
 
-These do not test behavior yet (the logic is unimplemented); they
-just guard against import errors and obvious signature drift. Replace
-and extend them as you implement each stage.
+Real behavioral coverage lives in test_zone.py, test_network.py, and
+test_parser.py (M1) and the corresponding files added for later
+milestones.
 """
 
 from __future__ import annotations
 
-from models.network import Network
-from models.zone import NormalZone
-from parsing.parser import Parser
+import models.connection
+import models.drone
+import models.network
+import models.zone
+import parsing.parser
+import pathfinding.bfs_flow
+import pathfinding.mincost_flow
+import simulation.scheduler
+import simulation.simulator
+import visualization.terminal
 
 
-def test_network_starts_empty() -> None:
-    """A fresh network has no zones registered."""
-    assert Network().zones == {}
-
-
-def test_normal_zone_entry_cost() -> None:
-    """A normal zone costs one turn to enter."""
-    assert NormalZone("a", 0, 0).entry_cost == 1
-
-
-def test_parser_constructs() -> None:
-    """The parser can be instantiated with its zone factory."""
-    assert Parser().factory is not None
+def test_all_modules_import() -> None:
+    """Every module in the project can be imported without error."""
+    modules = (
+        models.zone,
+        models.connection,
+        models.network,
+        models.drone,
+        parsing.parser,
+        pathfinding.bfs_flow,
+        pathfinding.mincost_flow,
+        simulation.scheduler,
+        simulation.simulator,
+        visualization.terminal,
+    )
+    assert all(module is not None for module in modules)

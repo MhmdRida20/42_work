@@ -31,6 +31,7 @@ class Drone:
         self.id = drone_id
         self.position: Zone | Connection = start
         self.path: list[Zone] = []
+        self.path_index: int = 0
         self.remaining_transit: int = 0
         self.state: DroneState = DroneState.AT_ZONE
 
@@ -44,12 +45,33 @@ class Drone:
         """Whether the drone has reached the end zone."""
         return self.state is DroneState.DELIVERED
 
-    def step(self) -> None:
-        """Advance the drone by one turn along its assigned path.
+    @property
+    def next_zone(self) -> Zone | None:
+        """The zone this drone would move into next.
 
-        Handles normal moves, multi-turn transit toward restricted
-        zones, and waiting. Updates ``position``/``state`` in place.
+        Returns:
+            The next zone on ``path``, or None if delivered or the
+            path has not been assigned yet.
         """
-        # TODO: implement the per-drone state machine (AT_ZONE ->
-        # IN_TRANSIT -> AT_ZONE, restricted 2-turn transit, delivery).
-        raise NotImplementedError
+        if self.state is DroneState.DELIVERED:
+            return None
+        if self.path_index + 1 >= len(self.path):
+            return None
+        return self.path[self.path_index + 1]
+
+    def advance(self) -> None:
+        """Commit a one-turn move into :attr:`next_zone`.
+
+        Updates ``position`` and ``path_index``, and marks the drone
+        delivered once it reaches the last zone of its path.
+
+        Raises:
+            ValueError: If there is no next zone to advance into.
+        """
+        next_zone = self.next_zone
+        if next_zone is None:
+            raise ValueError(f"{self.label} has no next zone to advance to")
+        self.position = next_zone
+        self.path_index += 1
+        if self.path_index == len(self.path) - 1:
+            self.state = DroneState.DELIVERED

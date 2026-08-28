@@ -1,0 +1,5 @@
+# Missing start_hub: only an end_hub is declared.
+nb_drones: 2
+end_hub: goal 10 10
+hub: mid 5 5
+connection: mid-goal

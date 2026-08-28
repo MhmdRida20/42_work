@@ -55,5 +55,4 @@ class Connection:
 
     def can_traverse(self) -> bool:
         """Return True if another drone may cross this edge this turn."""
-        # TODO: compare ``in_transit`` against ``max_link_capacity``.
-        raise NotImplementedError
+        return self.in_transit < self.max_link_capacity

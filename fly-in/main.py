@@ -6,10 +6,10 @@ import sys
 
 from parsing.errors import FlyInError
 from parsing.parser import Parser
-# Uncomment as you implement each stage:
-# from pathfinding.bfs_flow import BFSFlowFinder
-# from simulation.scheduler import Scheduler
-# from simulation.simulator import Simulator
+from pathfinding.bfs_flow import BFSFlowFinder
+from simulation.scheduler import Scheduler
+from simulation.simulator import Simulator
+# TODO: swap in once visualization/terminal.py is implemented (M6):
 # from visualization.terminal import TerminalVisualizer
 
 
@@ -27,17 +27,16 @@ def main(argv: list[str]) -> int:
         return 1
 
     try:
-        parser = Parser()
-        network, nb_drones = parser.parse_file(argv[1])
-        # TODO: wire up the pipeline once the stages are implemented:
-        #   paths = BFSFlowFinder().find_paths(network)
-        #   drones = Scheduler().assign(network, paths, nb_drones)
-        #   lines = Simulator(network, drones).run()
-        #   TerminalVisualizer().show_network(network)  # + turns/summary
-        _ = (network, nb_drones)
+        network, nb_drones = Parser().parse_file(argv[1])
+        paths = BFSFlowFinder().find_paths(network)
+        drones = Scheduler().assign(network, paths, nb_drones)
+        lines = Simulator(network, drones).run()
     except (FlyInError, NotImplementedError) as err:
         print(f"error: {err}", file=sys.stderr)
         return 1
+
+    for line in lines:
+        print(line)
 
     return 0
 

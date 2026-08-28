@@ -1,0 +1,6 @@
+# The same connection is declared twice, once reversed.
+nb_drones: 2
+start_hub: hub 0 0
+end_hub: goal 10 10
+connection: hub-goal
+connection: goal-hub

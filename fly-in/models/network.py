@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from models.connection import Connection
 from models.zone import Zone
+from parsing.errors import ParseError
 
 
 class Network:
@@ -59,9 +60,18 @@ class Network:
         Raises:
             ParseError: On a duplicate name or a second start/end.
         """
-        # TODO: reject duplicate names; set _start/_end when flagged
-        # (rejecting a second start or end); initialise adjacency.
-        raise NotImplementedError
+        if zone.name in self.zones:
+            raise ParseError(f"duplicate zone name: {zone.name!r}")
+        if is_start:
+            if self._start is not None:
+                raise ParseError("multiple start_hub zones defined")
+            self._start = zone
+        if is_end:
+            if self._end is not None:
+                raise ParseError("multiple end_hub zones defined")
+            self._end = zone
+        self.zones[zone.name] = zone
+        self.adjacency[zone.name] = []
 
     def add_connection(
         self,
@@ -80,9 +90,22 @@ class Network:
             ParseError: If a zone is unknown or the edge is a
                 duplicate (``a-b`` equals ``b-a``).
         """
-        # TODO: validate both zones exist, reject duplicates and
-        # self-loops, build a Connection and store it in adjacency.
-        raise NotImplementedError
+        if name_a not in self.zones:
+            raise ParseError(f"connection references unknown zone: {name_a!r}")
+        if name_b not in self.zones:
+            raise ParseError(f"connection references unknown zone: {name_b!r}")
+        if name_a == name_b:
+            raise ParseError(f"self-loop connection not allowed: {name_a!r}")
+
+        zone_a = self.zones[name_a]
+        zone_b = self.zones[name_b]
+        for existing in self.adjacency[name_a]:
+            if existing.other_end(zone_a) is zone_b:
+                raise ParseError(f"duplicate connection: {name_a}-{name_b}")
+
+        connection = Connection(zone_a, zone_b, max_link_capacity)
+        self.adjacency[name_a].append(connection)
+        self.adjacency[name_b].append(connection)
 
     def neighbors(self, zone: Zone) -> list[Connection]:
         """Return the connections incident to ``zone``.

@@ -1,0 +1,14 @@
+# Easy map: a single linear chain, default capacity 1 per zone.
+# Benchmark target (subject VII.7): 2 drones, <= 6 turns.
+nb_drones: 2
+start_hub: hub 0 0
+end_hub: goal 5 0
+hub: a 1 0
+hub: b 2 0
+hub: c 3 0
+hub: d 4 0
+connection: hub-a
+connection: a-b
+connection: b-c
+connection: c-d
+connection: d-goal

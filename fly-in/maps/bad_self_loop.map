@@ -1,0 +1,6 @@
+# A connection from a zone to itself is not allowed.
+nb_drones: 2
+start_hub: hub 0 0
+end_hub: goal 10 10
+connection: hub-hub
+connection: hub-goal

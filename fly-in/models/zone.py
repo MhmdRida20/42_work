@@ -14,6 +14,9 @@ from typing import TYPE_CHECKING
 
 from parsing.errors import ParseError
 
+# type_checking will help us use a class for type hints
+# without importing it at runtime.
+
 if TYPE_CHECKING:
     from models.drone import Drone
 

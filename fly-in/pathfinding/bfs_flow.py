@@ -53,6 +53,7 @@ class BFSFlowFinder(PathFinder):
 
         parents: dict[str, Zone] = {}
         visited = {source.name}
+        # double-ended queue
         queue: deque[Zone] = deque([source])
 
         while queue:

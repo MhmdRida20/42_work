@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from parsing.errors import ParseError
@@ -87,3 +89,38 @@ def test_comments_and_blank_lines_ignored() -> None:
     assert nb_drones == 1
     assert network.start.name == "a"
     assert network.end.name == "b"
+
+
+def test_non_utf8_file_raises_parse_error(tmp_path: Path) -> None:
+    """A file that isn't UTF-8 fails cleanly, without a traceback."""
+    map_file = tmp_path / "latin1.map"
+    map_file.write_bytes("# caf\xe9\nnb_drones: 1\n".encode("latin-1"))
+
+    with pytest.raises(ParseError, match="cannot read file"):
+        Parser().parse_file(str(map_file))
+
+
+def test_blocked_start_zone_raises() -> None:
+    """Drones can't begin inside a blocked zone."""
+    with pytest.raises(ParseError, match="line 2"):
+        Parser().parse_lines(
+            [
+                "nb_drones: 1\n",
+                "start_hub: a 0 0 [zone=blocked]\n",
+                "end_hub: b 1 0\n",
+                "connection: a-b\n",
+            ]
+        )
+
+
+def test_blocked_end_zone_raises() -> None:
+    """Drones can't be delivered into a blocked zone."""
+    with pytest.raises(ParseError, match="line 3"):
+        Parser().parse_lines(
+            [
+                "nb_drones: 1\n",
+                "start_hub: a 0 0\n",
+                "end_hub: b 1 0 [zone=blocked]\n",
+                "connection: a-b\n",
+            ]
+        )

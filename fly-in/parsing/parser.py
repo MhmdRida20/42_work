@@ -33,7 +33,7 @@ class Parser:
         try:
             with open(path, encoding="utf-8") as handle:
                 lines = handle.readlines()
-        except OSError as err:
+        except (OSError, UnicodeError) as err:
             raise ParseError(f"cannot read file: {err}") from err
         return self.parse_lines(lines)
 
@@ -154,6 +154,10 @@ class Parser:
 
         is_start = keyword == "start_hub"
         is_end = keyword == "end_hub"
+        if zone_type == "blocked" and (is_start or is_end):
+            raise ParseError(
+                "start and end zones cannot be blocked", line_number
+            )
         zone = self.factory.build(
             zone_type, name, x, y, color, max_drones,
             unlimited=(is_start or is_end),

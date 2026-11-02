@@ -32,10 +32,6 @@ class ParseError(FlyInError):
         super().__init__(message)
 
 
-class InvalidMapError(FlyInError):
-    """Raised when a map parses but is logically invalid."""
-
-
 class NoPathError(FlyInError):
     """Raised when no path exists from the start to the end zone."""
 

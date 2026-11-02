@@ -1,4 +1,4 @@
-_This project has been created as part of the 42 curriculum by mrida_
+_This project has been created as part of the 42 curriculum by mrida._
 
 # Fly-in
 
@@ -89,5 +89,7 @@ drones per turn, average turns per drone, total path cost).
 the project AI was used. -->
 AI was used to scaffold the initial project structure (directory
 layout, Makefile, lint/type-check configuration, class skeletons and
-this README outline). All algorithm and simulation logic is
-implemented by the author.
+this README outline). AI also wrote the first version of the models,
+parser, BFS, scheduler and simulator, and the author reviewed that
+code to be able to explain it. Later changes were made with AI
+guidance, and most of them were typed by the author.

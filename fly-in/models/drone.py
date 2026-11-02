@@ -75,3 +75,16 @@ class Drone:
         self.path_index += 1
         if self.path_index == len(self.path) - 1:
             self.state = DroneState.DELIVERED
+        else:
+            self.state = DroneState.AT_ZONE
+
+    def begin_transit(self, connection: Connection, turns: int) -> None:
+        """Leave the current zone and fly along ``connection``.
+
+        Args:
+            connection: The connection toward :attr:`next_zone`.
+            turns: Total turns the movement takes.
+        """
+        self.position = connection
+        self.remaining_transit = turns - 1
+        self.state = DroneState.IN_TRANSIT

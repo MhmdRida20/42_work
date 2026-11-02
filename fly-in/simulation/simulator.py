@@ -8,19 +8,18 @@ be tested and reused by the scheduler across candidate flow values.
 from __future__ import annotations
 
 from models.connection import Connection
-from models.drone import Drone
+from models.drone import Drone, DroneState
 from models.network import Network
 from models.zone import Zone
+from parsing.errors import SimulationError
 
 
 class Simulator:
     """Run drones along their assigned paths, one turn at a time.
 
-    This milestone handles single-turn moves through normal/priority
-    zones, respecting zone and connection capacity. Multi-turn
-    restricted-zone transit and priority-aware tie-breaking are added
-    in a later milestone; for now, ties are broken deterministically
-    by ascending drone id.
+    Respects zone and connection capacity. A move into a restricted
+    zone puts the drone on the connection first, and it must land when
+    its flight ends. Ties are broken by ascending drone id.
     """
 
     def __init__(self, network: Network, drones: list[Drone]) -> None:
@@ -39,9 +38,15 @@ class Simulator:
 
         Returns:
             One formatted output line per turn (see spec VII.5).
+
+        Raises:
+            SimulationError: If a turn passes and no drone can move.
         """
         while not all(drone.delivered for drone in self.drones):
-            self.turns.append(self.step())
+            line = self.step()
+            if not line:
+                raise SimulationError("no drone can move: the run is stuck")
+            self.turns.append(line)
         return self.turns
 
     def step(self) -> str:
@@ -51,11 +56,20 @@ class Simulator:
             The space-separated movement line for this turn, e.g.
             ``D1-roof1 D2-corridorA`` (drones that don't move are
             omitted).
+
+        Raises:
+            SimulationError: If a blocked drone's zone is already full.
         """
+        in_flight = [
+            drone
+            for drone in self.drones
+            if drone.state is DroneState.IN_TRANSIT
+        ]
         movers = [
             drone
             for drone in self.drones
-            if not drone.delivered and drone.next_zone is not None
+            if drone.state is DroneState.AT_ZONE
+            and drone.next_zone is not None
         ]
 
         # Leavers free their zone's capacity for this same turn, before
@@ -69,6 +83,17 @@ class Simulator:
                 connection.in_transit = 0
 
         moved: list[Drone] = []
+
+        # A flying drone cannot wait. Its place in the zone was reserved
+        # at take-off, but it still uses the connection this turn.
+        for drone in in_flight:
+            assert isinstance(drone.position, Connection)
+            drone.position.in_transit += 1
+            drone.remaining_transit -= 1
+            if drone.remaining_transit == 0:
+                drone.advance()
+            moved.append(drone)
+
         for drone in sorted(movers, key=lambda d: d.id):
             current = drone.position
             next_zone = drone.next_zone
@@ -76,12 +101,21 @@ class Simulator:
             connection = self._connection_between(current, next_zone)
 
             if not next_zone.has_capacity() or not connection.can_traverse():
+                # A drone with a lower id may have taken this place when
+                # it looked free, so going back could overfill the zone.
+                if not current.has_capacity():
+                    raise SimulationError(
+                        f"{drone.label} is blocked and {current.name} is full"
+                    )
                 current.occupants.append(drone)
                 continue
 
             connection.in_transit += 1
-            drone.advance()
             next_zone.occupants.append(drone)
+            if next_zone.entry_cost > 1:
+                drone.begin_transit(connection, next_zone.entry_cost)
+            else:
+                drone.advance()
             moved.append(drone)
 
         moved.sort(key=lambda d: d.id)

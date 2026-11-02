@@ -38,3 +38,7 @@ class InvalidMapError(FlyInError):
 
 class NoPathError(FlyInError):
     """Raised when no path exists from the start to the end zone."""
+
+
+class SimulationError(FlyInError):
+    """Raised when a run cannot continue without breaking a rule."""

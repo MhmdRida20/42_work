@@ -1,0 +1,6 @@
+# Edge case: the start is linked straight to the end.
+# The link carries one drone per turn, so 3 drones take 3 turns.
+nb_drones: 3
+start_hub: s 0 0
+end_hub: e 1 0
+connection: s-e

@@ -34,6 +34,8 @@ class Drone:
         self.path_index: int = 0
         self.remaining_transit: int = 0
         self.state: DroneState = DroneState.AT_ZONE
+        # Set by the simulator on the turn the drone is delivered.
+        self.arrival_turn: int | None = None
 
     @property
     def label(self) -> str:

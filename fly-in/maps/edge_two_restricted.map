@@ -1,0 +1,11 @@
+# Edge case: two restricted zones in a row, 2 + 2 + 1 = 5 turns a drone.
+# r1 is reserved for D1 on turns 1 and 2. D2 takes off on turn 3, as D1
+# leaves r1, and arrives 4 turns later: 7 turns.
+nb_drones: 2
+start_hub: s 0 0
+hub: r1 1 0 [zone=restricted]
+hub: r2 2 0 [zone=restricted]
+end_hub: e 3 0
+connection: s-r1
+connection: r1-r2
+connection: r2-e

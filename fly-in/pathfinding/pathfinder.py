@@ -1,6 +1,6 @@
 """Abstract path finder (Strategy pattern).
 
-Concrete strategies (BFS multi-path, min-cost flow) implement
+Concrete strategies (``BFSFlowFinder``, ``SpaceTimeFinder``) implement
 :meth:`PathFinder.find_paths` and can be swapped without touching
 the simulator.
 """
@@ -18,14 +18,16 @@ class PathFinder(ABC):
 
     @abstractmethod
     def find_paths(self, network: Network) -> list[list[Zone]]:
-        """Return candidate paths from the start zone to the end zone.
+        """Return paths from the start zone to the end zone.
 
         Args:
-            network: The (blocked-pruned) network to search.
+            network: The network to search. Blocked zones stay in it;
+                finders never route through them.
 
         Returns:
-            A list of paths, each an ordered list of zones from start
-            to end.
+            One path shared by every drone, or one route per drone in
+            id order. Each is an ordered list of zones from start to
+            end.
 
         Raises:
             NoPathError: If the end zone is unreachable.

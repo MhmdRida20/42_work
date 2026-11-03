@@ -13,7 +13,7 @@ import models.network
 import models.zone
 import parsing.parser
 import pathfinding.bfs_flow
-import pathfinding.mincost_flow
+import pathfinding.space_time
 import simulation.scheduler
 import simulation.simulator
 import visualization.terminal
@@ -28,7 +28,7 @@ def test_all_modules_import() -> None:
         models.drone,
         parsing.parser,
         pathfinding.bfs_flow,
-        pathfinding.mincost_flow,
+        pathfinding.space_time,
         simulation.scheduler,
         simulation.simulator,
         visualization.terminal,

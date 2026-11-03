@@ -229,3 +229,29 @@ def test_blocked_drone_cannot_overfill_its_zone() -> None:
 
     with pytest.raises(SimulationError):
         Simulator(network, [first, second]).step()
+
+
+def test_planned_wait_prints_nothing_and_keeps_the_place() -> None:
+    """A zone repeated in a path makes the drone stay there one turn."""
+    network, _ = Parser().parse_lines(
+        [
+            "nb_drones: 2\n",
+            "start_hub: s 0 0\n",
+            "end_hub: e 2 0\n",
+            "hub: a 1 0\n",
+            "hub: b 1 1\n",
+            "connection: s-a\n",
+            "connection: s-b\n",
+            "connection: a-e\n",
+            "connection: b-e\n",
+        ]
+    )
+    s, a, b, e = (network.zones[name] for name in ("s", "a", "b", "e"))
+    drones = Scheduler().assign(network, [[s, a, a, e], [s, b, e]], 2)
+    simulator = Simulator(network, drones)
+
+    assert simulator.step() == "D1-a D2-b"
+    assert simulator.step() == "D2-e"
+    assert drones[0].position is a
+    assert drones[0] in a.occupants
+    assert simulator.step() == "D1-e"

@@ -69,3 +69,20 @@ def test_duplicate_connection_rejected_both_directions() -> None:
     network.add_connection("a", "b")
     with pytest.raises(ParseError):
         network.add_connection("b", "a")
+
+
+def test_connection_between_works_both_ways() -> None:
+    """The same connection is found from either end."""
+    network = _small_network()
+    start, mid = network.start, network.zones["mid"]
+
+    connection = network.connection_between(start, mid)
+    assert connection is network.connection_between(mid, start)
+    assert connection.name == "start-mid"
+
+
+def test_connection_between_unlinked_zones_raises() -> None:
+    """Asking for a connection that doesn't exist raises ValueError."""
+    network = _small_network()
+    with pytest.raises(ValueError):
+        network.connection_between(network.start, network.end)

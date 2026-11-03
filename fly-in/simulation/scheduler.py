@@ -1,9 +1,8 @@
-"""Scheduler: assign drones to paths and pick the best flow value.
+"""Scheduler: create the drones and give each one its path.
 
-Given the candidate paths, decide how many to use and how to spread
-the drones so the makespan (total turns) is minimised. Because the
-simulator is cheap, the scheduler can try every feasible flow value
-and keep the assignment with the fewest turns.
+A finder returns either one path shared by every drone (the BFS
+baseline) or one timed route per drone (the space-time planner). The
+scheduler handles both the same way.
 """
 
 from __future__ import annotations
@@ -15,12 +14,7 @@ from parsing.errors import NoPathError
 
 
 class Scheduler:
-    """Distribute drones across paths to minimise total turns.
-
-    For now every drone is assigned to the single path found by the
-    baseline BFS finder (balancing across multiple paths is added in a
-    later milestone).
-    """
+    """Create the drones in the start zone and hand out their paths."""
 
     def assign(
         self,
@@ -28,11 +22,15 @@ class Scheduler:
         paths: list[list[Zone]],
         nb_drones: int,
     ) -> list[Drone]:
-        """Create drones and assign each an optimal path.
+        """Create drones and give each one its path.
+
+        Drone ``i`` (counting from 0) gets ``paths[i % len(paths)]``:
+        with one path everyone shares it, with one route per drone
+        each drone gets its own.
 
         Args:
             network: The network (for the start zone).
-            paths: Candidate start -> end paths.
+            paths: Start -> end paths, in drone id order.
             nb_drones: Number of drones to route.
 
         Returns:
@@ -44,10 +42,9 @@ class Scheduler:
         if not paths:
             raise NoPathError("no paths available to assign drones to")
 
-        path = paths[0]
         drones = [Drone(i, network.start) for i in range(1, nb_drones + 1)]
-        for drone in drones:
-            drone.path = path
+        for index, drone in enumerate(drones):
+            drone.path = paths[index % len(paths)]
             network.start.occupants.append(drone)
         return drones
 
@@ -56,9 +53,14 @@ class Scheduler:
         """Return the weighted turn cost of a full path.
 
         Args:
-            path: An ordered list of zones from start to end.
+            path: An ordered list of zones from start to end. A zone
+                repeated for a planned wait costs nothing.
 
         Returns:
             The sum of ``entry_cost`` over every zone entered.
         """
-        return sum(zone.entry_cost for zone in path[1:])
+        return sum(
+            there.entry_cost
+            for here, there in zip(path, path[1:])
+            if there is not here
+        )

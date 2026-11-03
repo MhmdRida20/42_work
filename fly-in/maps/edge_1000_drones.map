@@ -1,0 +1,12 @@
+# Edge case: 1000 drones on two parallel routes, each carrying one drone
+# per turn. Each route delivers 500 drones; the last one enters a (or b)
+# on turn 500 and arrives on turn 501.
+nb_drones: 1000
+start_hub: s 0 0
+hub: a 1 0
+hub: b 1 1
+end_hub: e 2 0
+connection: s-a
+connection: s-b
+connection: a-e
+connection: b-e

@@ -20,7 +20,7 @@ The skeleton exists on disk. Files or methods marked *(Step N)* don't exist yet.
 | `.gitignore` | Excludes `__pycache__`, `.mypy_cache`, venvs, editor files. |
 | `requirements.txt` | Dev dependencies: flake8, mypy, pytest. |
 | `README.md` | Required 42 submission README: italic first line, Description, Instructions, Resources (+ AI usage), algorithm write-up, visualization write-up. |
-| `maps/` | `example.map`, our own easy and bad maps. The official maps move here in Step 5. |
+| `maps/` | `example.map`, the official maps in `easy/`, `medium/`, `hard/`, `challenger/`, our own `easy_linear.map`, the `bad_*` maps (parse errors) and the `edge_*` maps (Step 6.10). |
 | `tests/` | pytest suite. Not submitted (subject III.3), but it's how every step is verified. |
 
 ### `models/` — the domain objects (the "nouns" of the simulation)
@@ -29,7 +29,7 @@ The skeleton exists on disk. Files or methods marked *(Step N)* don't exist yet.
 |---|---|
 | `zone.py` | `Zone` abstract base (`name`, `x`, `y`, `color`, `max_drones`, `unlimited`, `occupants`, abstract `entry_cost`, `is_accessible`, `has_capacity()`). Subclasses `NormalZone`, `RestrictedZone`, `PriorityZone`, `BlockedZone`. `ZoneFactory.build()` turns a parsed `zone=<type>` string into the right subclass (raises on unknown type). Start and end are not subclasses: they are zones with `unlimited=True`. |
 | `connection.py` | `Connection`: an undirected edge (`zone_a`, `zone_b`, `max_link_capacity`, `in_transit` counter). `name` is the connection as written in the map (`zoneA-zoneB`), printed during restricted transit. `other_end(zone)` and `can_traverse()`. |
-| `network.py` | `Network`: the graph — `zones: dict[str, Zone]`, `adjacency: dict[str, list[Connection]]`, `start`/`end` properties, `add_zone`, `add_connection` (rejects duplicates/self-loops), `neighbors(zone)`, `connection_between(a, b)` *(Step 6)*. No graph library — all traversal is hand-written elsewhere. |
+| `network.py` | `Network`: the graph — `zones: dict[str, Zone]`, `adjacency: dict[str, list[Connection]]`, `start`/`end` properties, `add_zone`, `add_connection` (rejects duplicates/self-loops), `neighbors(zone)`, `connection_between(a, b)`. No graph library — all traversal is hand-written elsewhere. |
 | `drone.py` | `Drone`: `id`, `position` (a `Zone`, or a `Connection` while flying), `path`, `path_index`, `remaining_transit`, `state` (`DroneState` enum: `AT_ZONE` / `IN_TRANSIT` / `DELIVERED`), `label` (`D<id>`), `next_zone` (peek), `advance()` (commit), `begin_transit()`. |
 
 ### `parsing/` — text → objects, strictly
@@ -44,9 +44,8 @@ The skeleton exists on disk. Files or methods marked *(Step N)* don't exist yet.
 | File | Contains |
 |---|---|
 | `pathfinder.py` | `PathFinder` abstract base: `find_paths(network) -> list[list[Zone]]` (Strategy pattern — the simulator doesn't care which finder produced the paths). |
-| `bfs_flow.py` | `BFSFlowFinder` — the baseline strategy: one shortest path by number of connections, shared by all drones. It ignores turn costs, so it isn't the final planner; the tests use it. Its docstrings still describe multi-path flow and get corrected in Step 6. |
-| `space_time.py` | *(Step 6)* `ReservationTable` and `SpaceTimeFinder` — the real planner: one timed route per drone, found through (zone, turn) states. See §3. |
-| `mincost_flow.py` | Empty stub from the old plan. Deleted in Step 6. |
+| `bfs_flow.py` | `BFSFlowFinder` — the baseline strategy: one shortest path by number of connections, shared by all drones. It ignores turn costs, so it isn't the final planner; the simulator tests use it because one path makes their schedules easy to predict. |
+| `space_time.py` | `ReservationTable` and `SpaceTimeFinder` — the real planner, used by `main.py`: one timed route per drone, found through (zone, turn) states. See §3. |
 
 ### `simulation/` — executing the routes, turn by turn
 
@@ -109,39 +108,40 @@ The tracker follows the same steps: https://claude.ai/artifact/9iTN7ZXZP9fY8mvSC
   - [x] **5.4 Guards:** add `SimulationError(FlyInError)`. `run()` raises when a turn moves nobody; it used to loop forever. `step()` raises when a blocked drone's zone is already full; it used to overfill silently (two drones in a `max_drones=1` zone, reproduced). One path can't trigger this, because lower ids lead, and planned routes never block, so a guard is enough: `step()` doesn't need a redesign.
   - [x] **5.5 Parser fixes:** `parse_file` catches `UnicodeError` next to `OSError`: any non-UTF-8 file, even one `é` in a comment, used to end in a traceback, and the subject counts that as non-functional. `zone=blocked` is rejected on `start_hub`/`end_hub` (a blocked start used to run). The unused `InvalidMapError` is gone.
   - [x] **5.6 Official maps:** `maps_from_PDF/easy`, `medium`, `hard`, `challenger` and the README moved into `maps/` with `git mv`, content unchanged. `subject_flyin.pdf` is untracked and in `.gitignore` (it stays in the history of caec91f, already pushed).
-  - [ ] **5.7 Referee** in `tests/test_referee.py` (not the simulator's code): a `Referee` class replays the lines `main.py` printed and checks every rule on its own: adjacency, connection names as the map wrote them, blocked zones, zone capacity including the take-off reservation, link capacity including landing drones, a multi-turn move lasts exactly `entry_cost` turns, nobody waits on a connection, every drone is delivered. Run on every map, every time, with its turn count, plus hand-made bad runs that prove each check fires.
-  - [ ] **5.8 `make test`:** it fails today with 7 collection errors, because bare `pytest` can't import `models`. Change the rule to `$(PYTHON) -m pytest -q`. Also fix the Makefile comment's example `maps/easy_2.map`, which doesn't exist: use `maps/easy/01_linear_path.txt`.
-  - [ ] Verify: flake8, mypy, tests and referee clean. Turn counts match the "BFS + transit" column in §3, including `03_priority_puzzle` at 13 turns, which misses its target of 12 until Step 6.
+  - [x] **5.7 Referee** in `tests/test_referee.py` (not the simulator's code): a `Referee` class replays the lines `main.py` printed and checks every rule on its own: adjacency, connection names as the map wrote them, blocked zones, zone capacity including the take-off reservation, link capacity including landing drones, a multi-turn move lasts exactly `entry_cost` turns, nobody waits on a connection, every drone is delivered. Run on every map, every time, with its turn count, plus hand-made bad runs that prove each check fires.
+  - [x] **5.8 `make test`:** it failed with collection errors, because bare `pytest` puts `tests/` on the import path but not the project, so `import models` fails. The rule is now `$(PYTHON) -m pytest -q`. On Windows the venv has no `python3`, so run `make test PYTHON=.venv/Scripts/python.exe`. The Makefile comment's example is now `maps/easy/01_linear_path.txt` (`maps/easy_2.map` never existed).
+  - [x] Verify: flake8, mypy, tests and referee clean. Turn counts match the "BFS + transit" column in §3, including `03_priority_puzzle` at 13 turns, which misses its target of 12 until Step 6.
 
-- [ ] **Step 6 — Space-time planner** (`pathfinding/space_time.py`, see §3)
-  Replaces both the old BFS multi-path task and the old min-cost flow step. The core (6.1–6.7) is what meets every target and the Challenger; 6.8 and 6.9 are hardening.
-  - [ ] **6.1 `Network.connection_between(a, b)`:** move `Simulator._connection_between` here, because the planner needs it too.
-  - [ ] **6.2 Planned waits:** a repeated zone in a path means "stay one turn". `step()` sees `next_zone is position`, calls `advance()` and prints nothing.
-  - [ ] **6.3 `Scheduler.assign`:** give each drone `paths[index % len(paths)]`, so one shared BFS path and one route per drone both work.
-  - [ ] **6.4 `ReservationTable`:** who holds which zone and link on which turn. `zone_is_free`, `can_move` (checks every turn of the movement, so 2-turn moves need no special case), `book_route`. Unit-test it alone.
-  - [ ] **6.5 `SpaceTimeFinder(nb_drones)`:** for each drone, search (zone, turn) states for the earliest arrival. It's your BFS with time added to the state: `parents` and the rebuild are the same idea. Waiting is a neighbor. A restricted move jumps 2 turns, so the queue becomes a `heapq` ordered by turn. Book the route, then plan the next drone. `nb_drones` goes to the constructor, so `PathFinder.find_paths(network)` keeps its signature.
-  - [ ] **6.6 Tie-break:** among equal arrival turns, the least effort wins: priority zone 1, any other zone 2, waiting 0. A bonus for priority zones doesn't work: a drone bounces in and out of them to collect it. Test that a priority route beats an equal normal route.
-  - [ ] **6.7 Wire it into `main.py`.** Verify with the referee and a test of every target: all 10 official maps must match the "Space-time" column in §3. Example: `example.map` goes from 12 turns to 6, with the drones using both routes.
-  - [ ] **6.8 Second pass:** plan everything once, count how many drones entered each zone, plan again with "avoid crowded zones" as the first tie-break, and keep the better plan (the first one on a tie). Without this, an unlucky tie can queue every drone behind a route that crosses two free ones. It was 10 turns off the optimum on one random map; with the second pass, never more than 1.
-  - [ ] **6.9 Speed for large drone counts:** compute each zone's distance to the end once, backwards from the end (a zone missing from it is a dead end or blocked, which also replaces the reachability check). Order the heap by `turn + distance`. Start each drone's search at `last arrival - window`, not turn 0, with `window = 2 * distance from start + number of zones`. Measure it (see §3).
-  - [ ] **6.10 Edge-case maps** next to the bad ones: start directly linked to end, restricted end zone, two restricted zones in a row, disconnected end, route only through a blocked zone, two equal routes with one priority, drones needing the same link in opposite directions, 1000 drones.
-  - [ ] **6.11 Clean up:** delete `mincost_flow.py` and its import in `tests/test_smoke.py`. Correct the docstrings in `bfs_flow.py` and `scheduler.py` that describe multi-path flow. Correct the `Simulator` class docstring.
-  - [ ] Verify: referee clean on every map, same output on repeated runs (nothing may depend on set order).
+- [x] **Step 6 — Space-time planner** (`pathfinding/space_time.py`, see §3)
+  Replaces both the old BFS multi-path task and the old min-cost flow step. The core (6.1–6.7) is what meets every target and the Challenger; 6.8 and 6.9 are hardening. Done 2026-11-02; its output is identical to the lab prototype's on all 10 official maps, our own maps and 2000 random maps.
+  - [x] **6.1 `Network.connection_between(a, b)`:** moved here from `Simulator._connection_between`, because the planner needs it too.
+  - [x] **6.2 Planned waits:** a repeated zone in a path means "stay one turn". `step()` sorts ready drones into `movers` and `waiters`; a waiter calls `advance()`, keeps its place in `occupants`, uses no connection and prints nothing.
+  - [x] **6.3 `Scheduler.assign`:** gives each drone `paths[index % len(paths)]`, so one shared BFS path and one route per drone both work.
+  - [x] **6.4 `ReservationTable`:** who holds which zone and link on which turn. `zone_is_free`, `can_move` (checks every turn of the movement, so 2-turn moves need no special case), `book_route`. Unit-tested alone, including opposite directions sharing a link.
+  - [x] **6.5 `SpaceTimeFinder(nb_drones)`:** for each drone, search (zone, turn) states for the earliest arrival. It's your BFS with time added to the state: `parents` and the rebuild are the same idea. `_moves` lists the legal next steps of a state (waiting, if the zone has room, and every move the table allows). A restricted move jumps 2 turns, so the queue is a `heapq`. Book the route, then plan the next drone. `nb_drones` goes to the constructor, so `PathFinder.find_paths(network)` keeps its signature.
+  - [x] **6.6 Tie-break:** among equal arrival turns, the least effort wins: priority zone 1, any other zone 2, waiting 0. A bonus for priority zones doesn't work: a drone bounces in and out of them to collect it. Tested on `edge_priority_tie.map`, where the normal zone comes first by name.
+  - [x] **6.7 Wired into `main.py`.** The referee test checks every map against the "Space-time" column in §3. `example.map` went from 12 turns to 6, with the drones using both routes.
+  - [x] **6.8 Second pass:** plan everything once, count how many drones entered each zone, plan again with "avoid crowded zones" as the first tie-break, and keep the better plan (the first one on a tie). No official map needs it (both passes give the same count on all 10), so `edge_crowded_tie.map` (random seed 1138) tests it: 25 turns with one pass, 15 with two, and 15 is the proven best.
+  - [x] **6.9 Speed for large drone counts:** each zone's distance to the end is computed once, backwards from the end. A zone missing from it is blocked, or linked to the rest only through blocked zones. In an undirected map a dead end still has a distance (go back the way you came), so this replaces the reachability check rather than pruning dead ends. The heap is ordered by `turn + distance`. Each drone's search starts at `last arrival - window`, with `window = 2 * distance from start + number of zones`. Measured in §3.
+  - [x] **6.10 Edge-case maps** next to the bad ones, each with its expected turn count worked out by hand in its comment: `edge_start_to_end` (3), `edge_restricted_end` (5), `edge_two_restricted` (7), `edge_priority_tie` (2), `edge_crowded_tie` (15), `edge_1000_drones` (501, about 2 s), `edge_no_path_disconnected` and `edge_no_path_blocked` (clean "no path" error). Drones using one link in opposite directions is a `ReservationTable` unit test: the planner never routes two drones against each other, so no map can force it.
+  - [x] **6.11 Clean up:** `mincost_flow.py` deleted, with its import in `tests/test_smoke.py`. Docstrings in `bfs_flow.py`, `pathfinder.py`, `scheduler.py` and the `Simulator` corrected.
+  - [x] Verify: 117 tests, flake8 and mypy (`--strict` too) clean. Referee clean on every map and on 1331 solvable random maps. Same output under 4 different `PYTHONHASHSEED` values. Every drone arrives on the exact turn its route promised (a test). 20 deliberate bugs: 18 caught, and the 2 that survive can't change any output (the dead-end check, which matches blocked zones only; the window, which only saves time).
 
-- [ ] **Step 7 — Visualization** (mandatory, VII.1; see §6)
-  - [ ] **7.1 `show_network`:** zones in their map colors with type and capacity, connections with capacity, a legend.
-  - [ ] **7.2 `show_turn` with zone states:** VII.1 requires them, and the current signature only receives the movement line, so add a `network` parameter. Show `occupied/max` and drone ids per zone, and drones in flight. `occupants` also holds drones still flying toward the zone: compare `drone.position is zone`.
-  - [ ] **7.3 Hook:** `Simulator.run()` takes an optional `visualizer` and calls it after each `step()`. Existing calls to `run()` keep working.
-  - [ ] **7.4 `show_summary`:** turns, drones moved per turn, average turns per drone, total path cost. This needs each drone's arrival turn recorded, and `path_cost` must skip waits.
-  - [ ] **7.5 Colors:** the official maps use 17 color names and `ANSI_COLORS` has 4 of them. Missing: black, brown, crimson, cyan, darkred, gold, lime, magenta, maroon, orange, purple, rainbow, violet. Use 256-color codes. `black` must stay readable on a dark terminal, and `rainbow` needs a chosen look. Unknown names keep falling back to plain text.
-  - [ ] **7.6 Keep the format exact:** the `D<id>-…` lines stay byte-exact, with no colors and no prefix. When stdout isn't a terminal (`sys.stdout.isatty()`), print only those lines, so the output can be piped into a checker.
-  - [ ] Verify: watch a colored run end-to-end; `python main.py <map> | cat` prints only plain lines and the referee accepts them.
+- [x] **Step 7 — Visualization** (mandatory, VII.1; see §6). Done 2026-11-02.
+  - [x] **7.1 `show_network`:** every zone in its map color with its role, type, capacity and entry cost; blocked zones marked "never entered"; connections with their capacity; a short "how to read a turn".
+  - [x] **7.2 `show_turn` with zone states:** takes a `network` parameter now. After the exact movement line it prints one state line: drones waiting in the start, each busy zone as `used/max: D…`, each drone flying toward a restricted zone (`D3 to roof1 via hub-roof1`), and `delivered/total` at the end. `occupants` also holds drones still flying toward a zone, so "inside" compares `drone.position is zone`.
+  - [x] **7.3 Hook:** `Simulator.run(visualizer=None)` calls `show_turn` after each turn. Existing calls to `run()` work unchanged.
+  - [x] **7.4 `show_summary`:** `Simulator.metrics()` gives turns, drones moved per turn (movement tokens / turns, so a flying drone counts on both turns), average turns per drone (from `Drone.arrival_turn`, set in `run()`), and total path cost (`path_cost` now skips waits).
+  - [x] **7.5 Colors:** the maps use 18 names (17 plus `gray` in `example.map`); all are 256-color codes now. `black` is black on a light background, `rainbow` colors each letter in turn, names ignore case, unknown names stay plain.
+  - [x] **7.6 Keep the format exact:** the `D<id>-…` lines are printed untouched. `main.py` uses the visualizer only when `sys.stdout.isatty()`; piped or redirected, it prints only the movement lines.
+  - [x] Verify: 130 tests, flake8 and mypy (`--strict` too) clean. Piped output is unchanged and the referee accepts it. A test fakes a terminal and checks the movement lines are still exact. 12 deliberate bugs in the Step 7 code, all caught. Still to do by eye: watch a colored run in a real terminal (§11 review checklist).
 
 - [ ] **Step 8 — Polish & defense**
   - [x] **8.1 README, do now:** add the final period to the first line (the PDF sets it in italics, so it is part of the required line), and correct the AI usage section: AI wrote the first version of Steps 1–4.
   - [ ] **8.3** Full docstrings (PEP 257), type hints everywhere, `make lint-strict` clean.
   - [ ] **8.4 Small cleanups:** remove `NotImplementedError` from the `except` in `main.py` (no stubs left), the old `# TODO` comments, and the ineffective `[mypy-numpy]` sections in `setup.cfg`. Use `$(PYTHON) -m pip` in the Makefile, so `pip` can't belong to another Python.
   - [ ] **8.5 Integer parsing (low priority):** `int()` accepts `1_0`, `+3` and non-ASCII digits, so `nb_drones: 1_0` parses as 10. Reject them, in coordinates too.
+  - [ ] **8.5b UTF-8 BOM (low priority):** a map saved with a byte-order mark (Windows PowerShell 5.1's `Set-Content -Encoding utf8`, old Notepad) fails with `line 1: invalid line syntax: '﻿'`. Found 2026-11-02. Opening with `encoding="utf-8-sig"` accepts it and still reads plain UTF-8.
   - [ ] **8.6 Submission repo:** `Makefile`, `main.py` and `README.md` at the root of the repo you submit (today the git root is `42_work_git`, with the project in a subfolder). Leave out `tests/`, `plan_structure.md` and `subject_flyin.pdf`. Removing `tests/` also means removing the `test` rule and `pytest` from `requirements.txt`. Ask a peer whether `models/` and the other code folders are fine under "place all your files at the root".
   - [ ] **8.7 Fresh clone on a 42 machine:** `make install`, `lint`, `lint-strict`, `run`, `debug`, `clean`.
   - [ ] **8.8 Defense rehearsal** (§11), without notes.
@@ -291,23 +291,24 @@ The planner's rules match the simulator's exactly: destination reserved from tak
 
 1. **Effort tie-break (6.6).** Priority zone 1, other zone 2, waiting 0. Any move costs more than waiting, so a drone never moves for nothing.
 2. **Second pass (6.8).** The first plan shows where the crowd went. The second plan avoids those zones when that costs no time. Keep the better one. This is a simple form of negotiated congestion.
-3. **Goal direction and window (6.9).** Order the heap by `turn + distance to end`, skip dead ends, and don't search departure turns too early to matter. Waiting at the start is always legal, so any plan this produces is still valid. The official maps' output didn't change.
+3. **Goal direction and window (6.9).** Order the heap by `turn + distance to end`, skip zones that can't reach the end, and don't search departure turns too early to matter. Waiting at the start is always legal, so any plan this produces is still valid. The official maps' output didn't change.
 
 ### How sure are we?
 
-Measured on the prototype. Measure again on your own code.
+The project's planner (Step 6) gives exactly the prototype's output on the 10 official maps, our own maps and 2000 random maps, so the prototype's measurements below hold for it. The timings were measured again on the project code, 2026-11-02.
 
 - **Official maps:** all 10 optimal, each planned in under 0.1 s.
 - **1331 solvable random maps, compared with the exact optimum:** 0 invalid schedules, 0 stuck runs, exact on 1327 (99.7%), never more than 1 turn off. Planning is a heuristic, not a proof: don't claim it is always optimal.
-- **Planner and simulator agree:** on every map above, the simulator's turn count equals what the planner promised, so no planned move is ever blocked.
-- **Prototype size:** about 150 lines of code for the planner, without docstrings.
+- **Planner and simulator agree:** every drone arrives on the exact turn its route promised, so no planned move is ever blocked (`test_every_drone_arrives_when_planned`).
+- **Size:** about 150 lines of code for the planner, without docstrings.
 
 | Drones | Hardest map (ultimate) | Narrow map (Challenger) |
 |---:|---:|---:|
-| 100 | 2.4 s | 0.1 s |
-| 300 | 6.6 s | 0.4 s |
-| 1000 | 26 s | 2.7 s |
-| 3000 | 99 s | |
+| 100 | 3.7 s | 0.3 s |
+| 300 | 12 s | 0.9 s |
+| 1000 | 53 s (48 s of it planning) | 5.0 s |
+
+The prototype measured about half these times on 2026-10-31, with identical output. The difference is the machine, not the code. Planning (two passes) is almost all of it; simulation is about 2 s at 1000 drones.
 
 ### Complexity (for the README)
 
@@ -451,3 +452,36 @@ Time yourself: each should take a few minutes.
 - Change the tie-break: prefer the highest drone id, or ignore priority zones.
 - Add a metric to `show_summary`.
 - Store new information on `Drone` and display it.
+
+### Review of the code Claude wrote (5.7 to Step 7)
+
+Work top to bottom. For each item: read it, explain it out loud, then do the "try" (a deliberate break; the named test must fail), and undo it with `git restore <file>`. Every "try" was checked: it fails exactly that test. Line numbers are from 2026-11-02.
+
+- [ ] **0. Commit first**, so `git restore` brings back the verified version. Then `git diff 740c457 --stat` lists every changed file, and `git diff 740c457 -- <file>` shows one.
+- [ ] **1. Watch it run** in the VS Code terminal: `.\.venv\Scripts\python.exe main.py maps/example.map` (colors, zone states, summary), then the Challenger map (black, rainbow, 43 turns). Then `... main.py maps/example.map > out.txt` and open `out.txt`: only the 6 movement lines.
+- [ ] **2. Models:** `Drone.arrival_turn` (`drone.py:38`), `Network.connection_between` (`network.py:110`, moved from the simulator).
+- [ ] **3. Simulator:** `movers`/`waiters` (`simulator.py:109`): a repeated zone is a wait, the drone advances, keeps its place and prints nothing. `run(visualizer)` (`:40`) sets `arrival_turn` and calls `show_turn`. `metrics()` (`:65`). Try: delete the `for drone in waiters` loop → `test_every_map_breaks_no_rule[maps/example.map-6]`.
+- [ ] **4. Scheduler:** `paths[index % len(paths)]` (`scheduler.py:47`), `path_cost` skips waits (`:52`). Try: remove `if there is not here` → `test_path_cost_skips_planned_waits`.
+- [ ] **5a. `ReservationTable`** (`space_time.py:31`): two counters keyed by (name, turn). `zone_is_free`, `can_move` (every turn of the move), `book_route` (a wait books the zone; a move books the link and the destination on each of its turns). Try: in `can_move`, `range(turn, turn + 1)` → `test_can_move_needs_the_zone_on_every_turn_of_the_flight`.
+- [ ] **5b. `find_paths`** (`:102`): distances, the "no path" check, two passes, keep the better. Try: `return first` → `test_every_map_breaks_no_rule[maps/edge_crowded_tie.map-15]` (25 turns).
+- [ ] **5c. `_plan_all`** (`:131`): drones in id order, the window and `earliest`.
+- [ ] **5d. `_earliest_route`** (`:163`): the heap tuple order (best arrival, crowding, effort, turn, name, parent); `parents` is your BFS's visited set and parent map; the first end state popped is the earliest arrival; `earliest` waits at the start are added in front.
+- [ ] **5e. `_moves`** (`:224`): waiting (only if the zone has room, effort 0) and every move `can_move` allows (effort 1 priority, 2 other). The one place the code differs from the lab prototype: pulled out of the loop so the "waiting needs room" rule could be tested; output identical on 2012 maps. Try: waiting effort 1 → `test_waiting_needs_room_and_costs_no_effort`; priority effort 2 → `test_priority_route_wins_a_tie`.
+- [ ] **5f. `_distances_to_end`** (`:261`, Dijkstra backwards from the end; a missing zone is blocked) and `_rebuild` (`:292`).
+- [ ] **6. `main.py:33`:** the visualizer only on a terminal. Try: swap the two branches → the referee tests fail (piped output gets extra lines).
+- [ ] **7. Visualization:** `show_turn` now receives the network (`visualizer.py:24`). In `terminal.py`: `ANSI_COLORS`, `colorize` (`:59`, rainbow and case), `show_network` (`:81`), `show_turn` (`:113`, the order of the state line), `show_summary` (`:137`), `_inside` (`:183`, why it compares positions). Try: make `_inside` return every occupant → `test_show_turn_prints_the_line_then_the_zone_states`.
+- [ ] **8. Tests:** `test_referee.py` (the `Referee` class, then the map table), `test_space_time.py` (table tests, planner tests, and `test_every_drone_arrives_when_planned`: why it exists), `test_terminal.py` (the exact state lines, the fake terminal), and the small additions in `test_network.py`, `test_simulator.py`, `test_scheduler.py`, `test_smoke.py`.
+- [ ] **9. Edge maps:** read each `maps/edge_*.map` comment and redo the count by hand (3, 5, 7, 2, 501).
+- [ ] **10. Makefile:** the `test` rule and the comment.
+
+Choices you may want to change (decisions, not rules):
+
+- On a terminal the state lines go to stdout between the movement lines; stderr would be the alternative.
+- The start shows "0 waiting" even when empty; other empty zones are not shown.
+- Connections are listed in adjacency order, not map order (the map order isn't stored).
+- "Drones moved per turn" counts a flying drone on both of its turns.
+- `arrival_turn` is set in `run()`, so calling `step()` by hand doesn't set it.
+- The simulator imports `Scheduler` (for `path_cost`) and `Visualizer` (for the type hint).
+- Some tests call private methods (`_plan_all`, `_distances_to_end`, `_moves`).
+- The colors themselves: black on light gray, the shades of maroon and darkred.
+- `main.py` still catches `NotImplementedError` (8.4 removes it).

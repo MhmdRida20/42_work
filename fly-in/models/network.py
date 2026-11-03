@@ -107,6 +107,24 @@ class Network:
         self.adjacency[name_a].append(connection)
         self.adjacency[name_b].append(connection)
 
+    def connection_between(self, a: Zone, b: Zone) -> Connection:
+        """Return the connection linking ``a`` and ``b``.
+
+        Args:
+            a: One endpoint.
+            b: The other endpoint.
+
+        Returns:
+            The connection between them, whichever way the map wrote it.
+
+        Raises:
+            ValueError: If ``a`` and ``b`` are not directly connected.
+        """
+        for connection in self.neighbors(a):
+            if connection.other_end(a) is b:
+                return connection
+        raise ValueError(f"no connection between {a.name} and {b.name}")
+
     def neighbors(self, zone: Zone) -> list[Connection]:
         """Return the connections incident to ``zone``.
 

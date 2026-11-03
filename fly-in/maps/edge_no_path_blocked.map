@@ -1,0 +1,8 @@
+# Edge case: the only route goes through a blocked zone. Must stop with
+# a clean "no path" error, not a traceback.
+nb_drones: 2
+start_hub: s 0 0
+hub: wall 1 0 [zone=blocked]
+end_hub: e 2 0
+connection: s-wall
+connection: wall-e

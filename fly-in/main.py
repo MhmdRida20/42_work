@@ -6,15 +6,19 @@ import sys
 
 from parsing.errors import FlyInError
 from parsing.parser import Parser
-from pathfinding.bfs_flow import BFSFlowFinder
+from pathfinding.space_time import SpaceTimeFinder
 from simulation.scheduler import Scheduler
 from simulation.simulator import Simulator
-# TODO: swap in once visualization/terminal.py is implemented (M6):
-# from visualization.terminal import TerminalVisualizer
+from visualization.terminal import TerminalVisualizer
 
 
 def main(argv: list[str]) -> int:
     """Run the simulation for the map given on the command line.
+
+    On a terminal, the run is shown with colors, zone states and the
+    secondary metrics. Piped or redirected, only the movement lines are
+    printed, exactly in the subject's format, so a checker can read
+    them.
 
     Args:
         argv: Process arguments; ``argv[1]`` is the map file path.
@@ -26,18 +30,24 @@ def main(argv: list[str]) -> int:
         print("usage: python main.py <map_file>", file=sys.stderr)
         return 1
 
+    visualizer = TerminalVisualizer() if sys.stdout.isatty() else None
     try:
         network, nb_drones = Parser().parse_file(argv[1])
-        paths = BFSFlowFinder().find_paths(network)
+        paths = SpaceTimeFinder(nb_drones).find_paths(network)
         drones = Scheduler().assign(network, paths, nb_drones)
-        lines = Simulator(network, drones).run()
+        simulator = Simulator(network, drones)
+        if visualizer is not None:
+            visualizer.show_network(network)
+        lines = simulator.run(visualizer)
     except (FlyInError, NotImplementedError) as err:
         print(f"error: {err}", file=sys.stderr)
         return 1
 
-    for line in lines:
-        print(line)
-
+    if visualizer is None:
+        for line in lines:
+            print(line)
+    else:
+        visualizer.show_summary(simulator.metrics())
     return 0
 
 

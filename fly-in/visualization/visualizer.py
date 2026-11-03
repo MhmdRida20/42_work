@@ -21,12 +21,13 @@ class Visualizer(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def show_turn(self, turn_number: int, line: str) -> None:
-        """Display a single turn's movements.
+    def show_turn(self, turn_number: int, line: str, network: Network) -> None:
+        """Display one turn: its movements and the zone states after it.
 
         Args:
             turn_number: 1-based turn index.
             line: The formatted movement line for this turn.
+            network: The network, read for where every drone now is.
         """
         raise NotImplementedError
 

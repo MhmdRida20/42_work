@@ -1,0 +1,31 @@
+# Edge case: a random map (seed 1138 of the planner experiments) where an
+# unlucky tie sends every drone into the same crowded zones. One planning
+# pass takes 25 turns; the second pass, which avoids the zones the first
+# one crowded, takes 15, which an exact solver proved is the best.
+nb_drones: 10
+start_hub: s 0 0
+end_hub: e 5 0
+hub: z1_0 1 0 [zone=restricted max_drones=1]
+hub: z1_1 1 1 [zone=restricted max_drones=3]
+hub: z2_0 2 0 [zone=restricted max_drones=1]
+hub: z2_1 2 1 [zone=normal max_drones=2]
+hub: z3_0 3 0 [zone=restricted max_drones=1]
+hub: z3_1 3 1 [zone=normal max_drones=2]
+hub: z4_0 4 0 [zone=normal max_drones=2]
+hub: z4_1 4 1 [zone=normal max_drones=3]
+hub: z4_2 4 2 [zone=blocked max_drones=1]
+connection: s-z1_0 [max_link_capacity=1]
+connection: s-z1_1 [max_link_capacity=1]
+connection: z1_0-z2_0 [max_link_capacity=2]
+connection: z1_0-z2_1 [max_link_capacity=1]
+connection: z1_1-z2_0 [max_link_capacity=3]
+connection: z2_0-z3_1 [max_link_capacity=1]
+connection: z2_1-z3_0 [max_link_capacity=1]
+connection: z3_0-z4_1 [max_link_capacity=3]
+connection: z3_0-z4_2 [max_link_capacity=2]
+connection: z3_1-z4_0 [max_link_capacity=1]
+connection: z3_1-z4_2 [max_link_capacity=1]
+connection: z4_0-e [max_link_capacity=1]
+connection: z4_1-e [max_link_capacity=1]
+connection: z4_2-e [max_link_capacity=1]
+connection: z3_1-z4_1 [max_link_capacity=1]

@@ -1,0 +1,9 @@
+# Edge case: the end zone is restricted, so the last move takes 2 turns.
+# D1 flies a-e on turns 2 and 3. The landing still uses the link, so D2
+# can only take off on turn 4 and lands on turn 5: 5 turns.
+nb_drones: 2
+start_hub: s 0 0
+hub: a 1 0
+end_hub: e 2 0 [zone=restricted]
+connection: s-a
+connection: a-e

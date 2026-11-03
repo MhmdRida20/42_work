@@ -1,8 +1,9 @@
 """Simulator: the deterministic turn-by-turn engine.
 
 This is where the movement and occupancy rules are enforced exactly.
-Keep it pure and deterministic (same input -> same output) so it can
-be tested and reused by the scheduler across candidate flow values.
+It is deterministic (same input -> same output), and it never trusts
+the plan: a planner bug shows up as a clean error, never as an illegal
+turn.
 """
 
 from __future__ import annotations
@@ -12,6 +13,8 @@ from models.drone import Drone, DroneState
 from models.network import Network
 from models.zone import Zone
 from parsing.errors import SimulationError
+from simulation.scheduler import Scheduler
+from visualization.visualizer import Visualizer
 
 
 class Simulator:
@@ -19,7 +22,8 @@ class Simulator:
 
     Respects zone and connection capacity. A move into a restricted
     zone puts the drone on the connection first, and it must land when
-    its flight ends. Ties are broken by ascending drone id.
+    its flight ends. A zone repeated in a drone's path is a planned
+    wait. Ties are broken by ascending drone id.
     """
 
     def __init__(self, network: Network, drones: list[Drone]) -> None:
@@ -33,8 +37,12 @@ class Simulator:
         self.drones = drones
         self.turns: list[str] = []
 
-    def run(self) -> list[str]:
+    def run(self, visualizer: Visualizer | None = None) -> list[str]:
         """Run until every drone is delivered.
+
+        Args:
+            visualizer: Optional. Shown each turn once it is played; it
+                only reads the state, so it can't change the run.
 
         Returns:
             One formatted output line per turn (see spec VII.5).
@@ -47,7 +55,34 @@ class Simulator:
             if not line:
                 raise SimulationError("no drone can move: the run is stuck")
             self.turns.append(line)
+            for drone in self.drones:
+                if drone.delivered and drone.arrival_turn is None:
+                    drone.arrival_turn = len(self.turns)
+            if visualizer is not None:
+                visualizer.show_turn(len(self.turns), line, self.network)
         return self.turns
+
+    def metrics(self) -> dict[str, float]:
+        """Return the secondary metrics of a finished run (VII.6).
+
+        Returns:
+            The number of turns, the drones moved per turn on average,
+            the average turn a drone is delivered on, and the total
+            path cost (every drone's weighted moves, waits excluded).
+        """
+        turns = len(self.turns)
+        moves = sum(len(line.split()) for line in self.turns)
+        arrivals = [drone.arrival_turn or 0 for drone in self.drones]
+        return {
+            "turns": turns,
+            "drones moved per turn": moves / turns if turns else 0.0,
+            "average turns per drone": (
+                sum(arrivals) / len(arrivals) if arrivals else 0.0
+            ),
+            "total path cost": sum(
+                Scheduler.path_cost(drone.path) for drone in self.drones
+            ),
+        }
 
     def step(self) -> str:
         """Advance the simulation by exactly one turn.
@@ -65,12 +100,23 @@ class Simulator:
             for drone in self.drones
             if drone.state is DroneState.IN_TRANSIT
         ]
-        movers = [
+        ready = [
             drone
             for drone in self.drones
             if drone.state is DroneState.AT_ZONE
             and drone.next_zone is not None
         ]
+        movers = [
+            drone for drone in ready if drone.next_zone is not drone.position
+        ]
+        waiters = [
+            drone for drone in ready if drone.next_zone is drone.position
+        ]
+
+        # A zone repeated in a path is a planned wait: the drone keeps
+        # its place, uses no connection and prints nothing this turn.
+        for drone in waiters:
+            drone.advance()
 
         # Leavers free their zone's capacity for this same turn, before
         # any entrant is validated.
@@ -98,7 +144,7 @@ class Simulator:
             current = drone.position
             next_zone = drone.next_zone
             assert isinstance(current, Zone) and next_zone is not None
-            connection = self._connection_between(current, next_zone)
+            connection = self.network.connection_between(current, next_zone)
 
             if not next_zone.has_capacity() or not connection.can_traverse():
                 # A drone with a lower id may have taken this place when
@@ -122,24 +168,6 @@ class Simulator:
         return " ".join(
             f"{drone.label}-{drone.position.name}" for drone in moved
         )
-
-    def _connection_between(self, a: Zone, b: Zone) -> Connection:
-        """Return the connection linking ``a`` and ``b``.
-
-        Args:
-            a: One endpoint.
-            b: The other endpoint.
-
-        Returns:
-            The connection between them.
-
-        Raises:
-            ValueError: If ``a`` and ``b`` are not directly connected.
-        """
-        for connection in self.network.neighbors(a):
-            if connection.other_end(a) is b:
-                return connection
-        raise ValueError(f"no connection between {a.name} and {b.name}")
 
     @property
     def turn_count(self) -> int:

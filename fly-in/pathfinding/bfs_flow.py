@@ -1,8 +1,9 @@
-"""Baseline strategy: BFS-based multi-path (Edmonds-Karp style).
+"""Baseline strategy: one shortest path by number of connections.
 
-Repeatedly finds augmenting paths in a residual graph until none
-remain, yielding a set of edge-disjoint paths that respect each
-connection's capacity. Good enough for the easy and most medium maps.
+Plain BFS, and every drone shares the path it finds. It ignores turn
+costs and the other drones, so it is not the real planner (see
+``space_time.py``). The simulator tests use it because a single path
+makes their schedules easy to predict.
 """
 
 from __future__ import annotations
@@ -16,14 +17,10 @@ from pathfinding.pathfinder import PathFinder
 
 
 class BFSFlowFinder(PathFinder):
-    """Find edge-disjoint paths via repeated BFS augmentation.
-
-    For now this returns a single shortest path (multi-path
-    augmentation is added in a later milestone).
-    """
+    """Find one shortest path (fewest connections) for every drone."""
 
     def find_paths(self, network: Network) -> list[list[Zone]]:
-        """Return edge-disjoint start -> end paths (see module doc)."""
+        """Return a single shortest start -> end path, in a list."""
         path = self._bfs(network, network.start, network.end)
         if path is None:
             raise NoPathError(
@@ -41,7 +38,7 @@ class BFSFlowFinder(PathFinder):
         """Return a shortest source -> sink path, or None if none.
 
         Args:
-            network: The (residual) network to search.
+            network: The network to search.
             source: Start zone.
             sink: End zone.
 

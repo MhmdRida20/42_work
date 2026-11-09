@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 
 from parsing.errors import FlyInError
@@ -24,7 +25,8 @@ def main(argv: list[str]) -> int:
         argv: Process arguments; ``argv[1]`` is the map file path.
 
     Returns:
-        Exit code: 0 on success, non-zero on any handled error.
+        Exit code: 0 on success, 1 on any handled error, 130 when
+        stopped with Ctrl+C.
     """
     if len(argv) < 2:
         print("usage: python main.py <map_file>", file=sys.stderr)
@@ -39,15 +41,24 @@ def main(argv: list[str]) -> int:
         if visualizer is not None:
             visualizer.show_network(network)
         lines = simulator.run(visualizer)
-    except (FlyInError, NotImplementedError) as err:
+        if visualizer is None:
+            for line in lines:
+                print(line)
+        else:
+            visualizer.show_summary(simulator.metrics())
+    except FlyInError as err:
         print(f"error: {err}", file=sys.stderr)
         return 1
-
-    if visualizer is None:
-        for line in lines:
-            print(line)
-    else:
-        visualizer.show_summary(simulator.metrics())
+    except KeyboardInterrupt:
+        print("interrupted", file=sys.stderr)
+        return 130
+    except BrokenPipeError:
+        # Whatever reads our output (``head``, for example) stopped
+        # early. Point stdout at the null device so Python's final
+        # flush can't fail again on the closed pipe.
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, sys.stdout.fileno())
+        return 1
     return 0
 
 

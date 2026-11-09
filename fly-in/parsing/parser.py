@@ -31,7 +31,8 @@ class Parser:
             ParseError: If the file cannot be read or is malformed.
         """
         try:
-            with open(path, encoding="utf-8") as handle:
+            # utf-8-sig also reads a file saved with a byte-order mark.
+            with open(path, encoding="utf-8-sig") as handle:
                 lines = handle.readlines()
         except (OSError, UnicodeError) as err:
             raise ParseError(f"cannot read file: {err}") from err
@@ -128,8 +129,8 @@ class Parser:
                 f"zone name {name!r} must not contain dashes", line_number
             )
         try:
-            x = int(x_str)
-            y = int(y_str)
+            x = self._strict_int(x_str)
+            y = self._strict_int(y_str)
         except ValueError:
             raise ParseError(
                 f"zone coordinates must be integers, got "
@@ -295,7 +296,7 @@ class Parser:
             ParseError: If the value is not a positive integer.
         """
         try:
-            value = int(value_str)
+            value = self._strict_int(value_str)
         except ValueError:
             raise ParseError(
                 f"{field_name} must be a positive integer, got {value_str!r}",
@@ -307,6 +308,28 @@ class Parser:
                 line_number,
             )
         return value
+
+    @staticmethod
+    def _strict_int(text: str) -> int:
+        """Convert ``text`` to an int written with plain digits only.
+
+        Python's ``int()`` also accepts ``1_0``, ``+3`` and non-ASCII
+        digits; a map number must look like ``42`` or ``-42``.
+
+        Args:
+            text: The raw number, without surrounding spaces.
+
+        Returns:
+            The integer value.
+
+        Raises:
+            ValueError: If ``text`` is not an optional ``-`` followed by
+                the digits 0-9.
+        """
+        digits = text[1:] if text.startswith("-") else text
+        if not (digits.isascii() and digits.isdigit()):
+            raise ValueError(f"not a plain integer: {text!r}")
+        return int(text)
 
     @staticmethod
     def _strip_comment(raw_line: str) -> str:

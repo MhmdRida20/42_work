@@ -60,6 +60,10 @@ The skeleton exists on disk. Files or methods marked *(Step N)* don't exist yet.
 |---|---|
 | `visualizer.py` | `Visualizer` abstract base: `show_network()`, `show_turn()`, `show_summary()`. Kept decoupled so rendering never affects correctness. |
 | `terminal.py` | `TerminalVisualizer` — ANSI-colored terminal output driven by each zone's `color` metadata, zone states per turn, and end-of-run secondary metrics (turns, drones/turn, avg turns/drone, total path cost). |
+| `frames.py` | *(Step 7b)* `Pose`, `Frame`, `Recorder`: the run turned into data, one frame per turn. No pygame. |
+| `layout.py` | *(Step 7b)* `Layout`: map coordinates to pixels, zone and drone sizes, slots, points on a link. No pygame. |
+| `playback.py` | *(Step 7b)* `Playback`: the replay clock (turn, progress, speed, pause) and where each drone is at any moment. No pygame. |
+| `graphical.py` | *(Step 7b)* pygame-ce: `SceneRenderer` (draws one moment), `GraphicalViewer` (window and event loop), `GraphicalVisualizer` (the `Visualizer` that records, then opens the window). |
 
 ---
 
@@ -136,15 +140,32 @@ The tracker follows the same steps: https://claude.ai/artifact/9iTN7ZXZP9fY8mvSC
   - [x] **7.6 Keep the format exact:** the `D<id>-…` lines are printed untouched. `main.py` uses the visualizer only when `sys.stdout.isatty()`; piped or redirected, it prints only the movement lines.
   - [x] Verify: 130 tests, flake8 and mypy (`--strict` too) clean. Piped output is unchanged and the referee accepts it. A test fakes a terminal and checks the movement lines are still exact. 12 deliberate bugs in the Step 7 code, all caught. Still to do by eye: watch a colored run in a real terminal (§11 review checklist).
 
+- [ ] **Step 7b — Graphical view with pygame-ce** (VII.1 allows terminal *or* graphical and suggests both; full design in §6.2)
+  The terminal view stays the default. `--visual` adds a window that **replays** the run once it is computed: the planner and the simulator don't change, and the printed lines stay exact. Each sub-step ends with tests; 7b.2 to 7b.4 import no pygame at all.
+  - [ ] **7b.1 Dependency:** add `pygame-ce` to `requirements.txt` and `make install` it (why not `pygame` or `arcade`: §6.2). In the venv, confirm what the scratch test of 2026-11-08 showed: `import pygame` prints a banner **to stdout** unless `PYGAME_HIDE_SUPPORT_PROMPT=1` is set before the import; `SDL_VIDEODRIVER=dummy` draws with no window; `make lint-strict` stays clean.
+  - [ ] **7b.2 Recording, `visualization/frames.py`:** `Pose`, `Frame`, `Recorder` (§6.2 "What a frame holds"). Test every frame of `edge_restricted_end.map` exactly, including D1 halfway along `a-e` on turn 2 and the link loads. Test that a restricted cost of 3 gives progress ⅓ then ⅔.
+  - [ ] **7b.3 Layout, `visualization/layout.py`:** map coordinates to pixels (y up, each axis fitted on its own, a one-value axis centred), zone and drone radius, slot positions, a point along a link, two zones on the same coordinates. Tests with negative coordinates, a one-row map, the Challenger's 23 × 4 grid, and a resize.
+  - [ ] **7b.4 Replay clock, `visualization/playback.py`:** turn, progress inside the turn, play/pause, speed, step, seek, and each drone's position at any moment (§6.2 "One turn on screen"). Tests: the easing, pause, both ends, a drone leaving the start, a delivery, a 2-turn flight stopping halfway.
+  - [ ] **7b.5 Drawing, `SceneRenderer` in `visualization/graphical.py`:** links, zones (map color, type mark, `used/max`, slots), drones, start and end counters, top and bottom bars, legend, tooltip, end-of-run summary (§6.2 "What the screen shows"). Headless tests: every frame of every map draws without error; a zone's centre pixel has its map color; importing the module prints nothing.
+  - [ ] **7b.6 Window, `GraphicalViewer`:** open the window, a 60 fps loop, keys and mouse (§6.2 "Controls"), resize, `pygame.quit()` in a `finally`. A missing pygame-ce or a `pygame.error` (no display) becomes `VisualizationError(FlyInError)`, so `main()` prints one clean line. Test the loop headless with posted events.
+  - [ ] **7b.7 Hook:** `GraphicalVisualizer(Visualizer)`: `show_network` records turn 0, `show_turn` records each turn, `show_summary` keeps the metrics and opens the window. Add `VisualizerGroup(Visualizer)` to `visualizer.py`: it forwards every call to several visualizers (the Composite pattern), so the terminal view and the window can run together.
+  - [ ] **7b.8 `main.py`:** `argparse` for `main.py MAP [--visual]` (`--help` for free; a missing map exits with code 2 and the usage, never a traceback). Import `visualization.graphical` only when `--visual` is given, so a normal run never loads pygame. With `--visual` and piped output: the plain lines first, then the window. `main()` grows here, so decide 8.4c (wrap it in a class) at this point.
+  - [ ] **7b.9 Makefile:** a `visual` rule, `$(PYTHON) main.py $(MAP) --visual`.
+  - [ ] Verify: flake8, `mypy --strict`, all tests (headless). Every map replays to its last turn with the right turn count. `python main.py <map> --visual | cat` prints exactly the lines of a normal run. No pygame-ce, or no display: one `error:` line, exit 1. Watched by you on the example, a restricted map, the Challenger and the 1000-drone map.
+
 - [ ] **Step 8 — Polish & defense**
+  Requirements audit against the whole subject, 2026-11-03: everything in III, V, VI, VII and IX is implemented and checked. What is left is listed here (8.4b, 8.6, 8.9 are new), plus the README in Step 9.
   - [x] **8.1 README, do now:** add the final period to the first line (the PDF sets it in italics, so it is part of the required line), and correct the AI usage section: AI wrote the first version of Steps 1–4.
-  - [ ] **8.3** Full docstrings (PEP 257), type hints everywhere, `make lint-strict` clean.
-  - [ ] **8.4 Small cleanups:** remove `NotImplementedError` from the `except` in `main.py` (no stubs left), the old `# TODO` comments, and the ineffective `[mypy-numpy]` sections in `setup.cfg`. Use `$(PYTHON) -m pip` in the Makefile, so `pip` can't belong to another Python.
-  - [ ] **8.5 Integer parsing (low priority):** `int()` accepts `1_0`, `+3` and non-ASCII digits, so `nb_drones: 1_0` parses as 10. Reject them, in coordinates too.
-  - [ ] **8.5b UTF-8 BOM (low priority):** a map saved with a byte-order mark (Windows PowerShell 5.1's `Set-Content -Encoding utf8`, old Notepad) fails with `line 1: invalid line syntax: '﻿'`. Found 2026-11-02. Opening with `encoding="utf-8-sig"` accepts it and still reads plain UTF-8.
+  - [x] **8.3** Full docstrings (PEP 257), type hints everywhere, `make lint-strict` clean. Checked 2026-11-03: an AST scan finds a docstring on every module, class and function, and `mypy --strict` is clean.
+  - [x] **8.4 Small cleanups:** `NotImplementedError` is gone from the `except` in `main.py` (no stubs left), no `# TODO` comments remain, the `[mypy-numpy]` sections are gone from `setup.cfg` (lint still clean), and `make install` runs `$(PYTHON) -m pip`, so `pip` can't belong to another Python.
+  - [x] **8.4b Two crash paths in `main.py` (III.1: a traceback counts as non-functional):** Ctrl+C now prints `interrupted` and exits with 130. When the reader of the output stops early (`| head`), `main()` points stdout at the null device (the recipe from Python's `signal` docs) and exits with 1, silently. The broken pipe was reproduced for real, on Windows too: a 200 KB line and a reader that closes after 20 bytes gave a `BrokenPipeError` traceback before, and an empty stderr after. Tests in `tests/test_main.py`.
+  - [ ] **8.4c (optional) "Completely object-oriented":** `main()` in `main.py` is the only function outside a class. An entry function is normally accepted; if a peer says otherwise, wrap it in a small class.
+  - [x] **8.5 Integer parsing:** `Parser._strict_int` accepts only an optional `-` followed by the digits 0-9, for `nb_drones`, capacities and coordinates. `1_0`, `+3`, `3.0` and Arabic digits are rejected with the line number; negative coordinates still work.
+  - [x] **8.5b UTF-8 BOM:** fixed with `encoding="utf-8-sig"` (tested). The original finding: a map saved with a byte-order mark (Windows PowerShell 5.1's `Set-Content -Encoding utf8`, old Notepad) fails with `line 1: invalid line syntax: '﻿'`. Found 2026-11-02. Opening with `encoding="utf-8-sig"` accepts it and still reads plain UTF-8.
   - [ ] **8.6 Submission repo:** `Makefile`, `main.py` and `README.md` at the root of the repo you submit (today the git root is `42_work_git`, with the project in a subfolder). Leave out `tests/`, `plan_structure.md` and `subject_flyin.pdf`. Removing `tests/` also means removing the `test` rule and `pytest` from `requirements.txt`. Ask a peer whether `models/` and the other code folders are fine under "place all your files at the root".
-  - [ ] **8.7 Fresh clone on a 42 machine:** `make install`, `lint`, `lint-strict`, `run`, `debug`, `clean`.
+  - [ ] **8.7 Fresh clone on a 42 machine:** `make install`, `lint`, `lint-strict`, `run`, `debug`, `clean`, and `make test`. The venv here is Python 3.14; the code compiles with the 3.10 grammar and gives the same output under 3.11, but Python 3.10 itself was never run.
   - [ ] **8.8 Defense rehearsal** (§11), without notes.
+  - [ ] **8.9 (optional) Large drone counts:** it works, but time grows about with the square of the drone count, because each waiting turn is a route entry. Measured on the two-route map: 1000 drones 1.7 s, 3000 drones 17 s (planning 4.9 s, of which `book_route` 4.4 s; simulation 12 s), 5000 drones 50 s. Cheap: `book_route` can skip waits in unlimited zones (they never limit anyone). The real fix, a departure turn instead of leading waits, changes the route format the simulator and scheduler use: decide before starting.
 
 - [ ] **Step 9 — Bonus check and README (only after Steps 1–8 are solid and green)**
   - [ ] Confirm all provided maps meet or beat their reference targets on your final code.
@@ -207,8 +228,12 @@ fly-in/
 │   ├── scheduler.py        # creates drones, gives each its route
 │   └── simulator.py        # turn-by-turn engine, enforces all rules
 ├── visualization/
-│   ├── visualizer.py       # abstract Visualizer
-│   └── terminal.py         # colored terminal output
+│   ├── visualizer.py       # abstract Visualizer, VisualizerGroup (7b)
+│   ├── terminal.py         # colored terminal output
+│   ├── frames.py           # the run as data: Pose, Frame, Recorder (7b)
+│   ├── layout.py           # map coordinates to pixels (7b)
+│   ├── playback.py         # replay clock and drone positions (7b)
+│   └── graphical.py        # pygame-ce window: renderer, viewer (7b)
 └── maps/                   # your own test maps + the provided ones
 ```
 
@@ -361,9 +386,122 @@ Use context managers for file handles, wrap parsing in try/except, and raise you
 ## 6. Visualization
 
 Mandatory (VII.1 asks for drone movements **and zone states**). Start simple, upgrade if time allows.
-- **Terminal (do this first):** ANSI colors driven by each zone's `color` metadata; render the turn line, zone occupancy, drones in flight, and a small legend. Also print the **secondary metrics** (turns, drones/turn, avg turns/drone, total path cost) — the subject encourages showing these to help reviewers.
-- **Graphical (optional polish):** a simple view of zones at their `x,y`. Only after the mandatory part is fully green. Coordinates can be negative.
+- **Terminal (done, Step 7):** ANSI colors driven by each zone's `color` metadata; render the turn line, zone occupancy, drones in flight, and a small legend. Also print the **secondary metrics** (turns, drones/turn, avg turns/drone, total path cost) — the subject encourages showing these to help reviewers.
+- **Graphical (Step 7b):** a pygame-ce window that replays the run on the map. Designed in §6.2.
 - Keep visualization **decoupled** from the simulator (an abstract `Visualizer` the simulator feeds events to) so it never affects correctness. The required `D<id>-…` lines must stay exact; colors and states are additional, and disappear when the output is piped.
+
+### 6.2 Graphical view (Step 7b)
+
+**Library: pygame-ce.** Checked on 2026-11-08 in a scratch venv, so these are facts, not guesses:
+
+| | pygame-ce 2.5.8 | pygame 2.6.1 | arcade 3.3.3 |
+|---|---|---|---|
+| Installs in your venv (Python 3.14, Windows) | yes | **no**: no 3.14 build, pip would try to compile SDL | yes |
+| Installs on a 42 machine (Python 3.10, Linux) | yes | yes | yes |
+| API | pygame's (`import pygame`): what you already know | pygame | new to you |
+| Needs | any display; can draw with no window, for tests | same | OpenGL 3.3 (fails on many VMs and remote sessions), plus pyglet, pymunk, Pillow |
+| `mypy --strict` and flake8 on a game-loop sample | clean | not tested | not tested |
+| Map color names it knows | 17 of 18 (not `rainbow`) | same names | own palette |
+
+pygame-ce is the community edition of pygame, with the same import name, so the two can't both be installed in one venv. Drawing 1000 drone discs and 80 text labels took 3.1 ms per frame headless (60 fps allows 16.7).
+
+**The banner rule.** `import pygame` prints `pygame-ce 2.5.8 (SDL 2.32.10, Python 3.14.6)` **to stdout**, which would break the output format. With `PYGAME_HIDE_SUPPORT_PROMPT=1` set before the import, it prints nothing (both checked). So `graphical.py` sets `os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")` right before `import pygame`, which needs one `# noqa: E402` with a comment saying why. A test imports the module in a subprocess and checks that stdout is empty.
+
+**How it runs: record, then replay.**
+
+```
+python main.py MAP --visual
+  parse -> plan -> Simulator.run(VisualizerGroup([terminal view if a terminal, GraphicalVisualizer]))
+      show_network(network)          -> Recorder: frame 0 (everyone in the start)
+      show_turn(k, line, network)    -> Recorder: frame k (pure data, no pygame)
+  piped: the plain lines are printed, exactly as without --visual
+  show_summary(metrics)              -> terminal summary, then the window replays frames 0..T
+  window closed                      -> exit 0
+```
+
+Why a replay and not a live view:
+- The simulator stays exactly as it is. A window needs its own event loop, and a live view would make the run wait for the screen, or freeze the window between turns.
+- A replay can pause, step back, restart and change speed, which a live run can't.
+- The result is never lost: the lines are printed before the window opens, and closing the window early changes nothing.
+- Recording is plain data, so it can be tested without a screen.
+
+**What a frame holds** (`frames.py`, frozen dataclasses):
+
+- `Pose(zone: str, link: str | None, progress: float)`: inside a zone, `link` is `None` and `progress` is 1.0. Flying, `zone` is the destination, `link` the connection's map name, and `progress` the share of the flight done: `(entry_cost - remaining_transit) / entry_cost`. That's ½ after a restricted take-off, and ⅓ then ⅔ if restricted ever costs 3.
+- `Frame(turn: int, line: str, poses: dict[int, Pose], waiting: int, delivered: int, link_load: dict[str, int])`.
+
+Recording rules, `Recorder.capture(network, turn, line)`:
+1. For every zone, each occupant is **inside** if `drone.position is zone`; otherwise it is **flying toward** this zone, on the connection `drone.position` (`occupants` holds the reservation).
+2. A drone gets a `Pose` if it is between the start and the end, **or** if it moved this turn (its location differs from the previous frame; the recorder keeps each drone's last location). Drones resting in the start or the end are only counted, in `waiting` and `delivered`. A frame therefore holds few poses: at most 18 drones are in play at once on the Challenger, and 2 on the 1000-drone map.
+3. `link_load` is each connection's `in_transit` after the turn, when above 0. The simulator already counts movers and flying drones there.
+4. Frame 0 has no poses, an empty line, and every drone waiting.
+
+**One turn on screen** (`playback.py`). Turn k is an animation from frame k-1 to frame k, lasting 600 ms at ×1, with smoothstep easing `t * t * (3 - 2t)`:
+
+| Drone in frame k-1 | Drone in frame k | During turn k |
+|---|---|---|
+| no pose (waiting in the start) | pose | from the start's centre to its new place |
+| pose | pose | straight from its old place to its new place |
+| pose (just reached the start or the end) | no pose | already there: now part of that zone's counter |
+
+A pose's **place** depends on where the drone is:
+- inside a normal zone: its slot (rank by id among the drones inside that zone in that frame);
+- in the start or the end: the zone's centre;
+- flying: the point at `progress` along the link, measured from the other end toward `zone`.
+
+So a restricted move is **two** animations: from the slot to the middle of the link on the take-off turn, then from the middle to the destination slot on the landing turn. When paused in between, the drone sits on the link with a ring around it. Each 2-turn flight therefore shows the rule "it can't wait on the connection": with cost 2, a drone is never on a link in two frames in a row.
+
+During turn k, the links in `link_load` glow and show `load/capacity`. Counters, slots and `used/max` switch to frame k when the animation ends, so what you see while paused is exactly the state after that turn.
+
+**What the screen shows** (`graphical.py`; 1280 × 800 by default, resizable, minimum 800 × 560):
+
+- Top bar: map name · `Turn k / T` · playing or paused · speed.
+- Map area: links under zones under drones.
+- Bottom bar: the movement line of turn k, exactly as `main.py` prints it, and the key hints.
+- Legend (toggle `L`): zone types, marks, drone states.
+- End overlay, on the last turn: the four metrics from `Simulator.metrics()`.
+- Tooltip on hover: a zone's name, type, capacity and drones; a drone's id and location.
+
+| Thing | Drawn as |
+|---|---|
+| zone | filled circle in its map color (`pygame.Color(name)`; an unknown name gives gray; `rainbow` cycles its hue over time); black zones get a light outline |
+| normal / priority / restricted / blocked | plain / double outline and a `P` badge / dashed outline and a `2` badge (turns to enter) / dark gray, crossed out, no slots. The type never depends on color alone. |
+| start / end | bigger circle, `S` / `E` badge, counter `12 waiting` / `5/25 delivered` |
+| capacity | slots around the centre: filled for a drone inside, a hollow ring for a place reserved by a drone flying in; `used/max` under the name. Over 8 slots: 8 drawn plus `+n`. |
+| link | gray line, thicker with capacity; glows and shows `load/cap` during a turn that uses it |
+| drone | small disc with its id, one hue per id (golden-ratio steps, so neighbours differ) |
+| drone flying | the same disc with a white ring, on the link |
+| drone that waited this turn | dimmed |
+| more than 40 drones in play | ids hidden; the tooltip still shows them |
+| zone names | small font under the circle, cut with `…` when longer than the space to the next zone; full name in the tooltip; `N` toggles them |
+
+**Layout math** (`layout.py`, recomputed when the window is resized):
+- Map area = the window minus the two bars and a 60 px margin.
+- Each axis is fitted on its own: `sx = width / (max_x - min_x)` and `sy = height / (max_y - min_y)`, each capped at 160 px per unit, and an axis with one value is centred. Coordinates are grid positions, not distances: with one shared scale, the Challenger (23 wide, 4 tall) would be a thin strip.
+- **y points up**: `screen_y = top + (max_y - y) * sy`. The subject's figures draw `path_a` (y = 1) above `path_b` (y = -1).
+- Zone radius `clamp(0.28 * min(sx, sy), 10, 26)`, drone radius `max(5, zone_radius // 3)`.
+- Slots: capacity 1 in the centre; up to 8 on a ring of 0.55 × the zone radius.
+- A point on a link: `a + (b - a) * progress`.
+- Two zones on the same coordinates (the parser accepts it): the second is shifted by one radius, so both stay visible.
+
+**Controls:**
+
+| Key | Action |
+|---|---|
+| Space | play / pause (it starts playing at ×1) |
+| → / ← | next / previous turn (pauses) |
+| ↑ / ↓ | faster / slower, ×0.25 to ×8 |
+| Home / End | first / last turn |
+| R | restart from turn 0 |
+| N / L | zone names / legend on or off |
+| Esc, Q, closing the window | quit |
+| mouse over a zone or a drone | tooltip |
+
+**Speed and memory.** Frames hold only the drones in play. The static part (links, zone bodies, names) is drawn once per window size into a surface, and text surfaces are cached by (text, size, color), because rendering text is the slow part.
+
+**Errors.** No pygame-ce: `VisualizationError("the graphical view needs pygame-ce: run make install")`. No display: `pygame.error` becomes `VisualizationError("cannot open a window: …")`. Both inherit `FlyInError`, so `main()` prints one `error:` line and exits with 1, after the lines are already printed. Ctrl+C while the window is open: `pygame.quit()` runs in the `finally`, then the existing handler exits with 130.
+
+**Tests without a screen.** `frames.py`, `layout.py` and `playback.py` import no pygame, so they are plain unit tests. The pygame tests use `pytest.importorskip("pygame")` and `SDL_VIDEODRIVER=dummy`: they draw every frame of every map, check pixels, and drive the loop with posted events. `make lint-strict` needs pygame-ce installed, because `--strict` has no `--ignore-missing-imports`; `make install` covers that.
 
 ---
 
@@ -387,6 +525,7 @@ Mandatory (VII.1 asks for drone movements **and zone states**). Start simple, up
 | **5. Full turn rules** | restricted transit, guards, parser fixes, referee, official maps | every official map runs with zero rule violations |
 | **6. Space-time planner** | one timed route per drone | **all 10 targets met**, Challenger in 43 |
 | **7. Visualization** | colored terminal, zone states, secondary metrics | reviewer can *see* the simulation clearly |
+| **7b. Graphical view** | pygame-ce window replaying the run (`--visual`) | every map replays; printed lines unchanged; headless tests green |
 | **8. Polish & defense** | docstrings, `mypy --strict`, submission repo | `make lint-strict` clean; rehearsal done |
 | **9. BONUS + README** | confirmed results, then your README | every target met on the final code; Challenger under 45; README written last, by you |
 
@@ -413,6 +552,9 @@ Mandatory (VII.1 asks for drone movements **and zone states**). Start simple, up
 7. **Unhandled exceptions** — one traceback in review means non-functional. Try non-UTF-8 and binary files, not only wrong syntax.
 8. **mypy under `--strict`** — annotate generics (`dict[str, Zone]`, `list[Connection]`), avoid `Any`.
 9. **"Explain / modify on the spot"** — see §11. Know each class well enough to edit it cold.
+10. **pygame's banner on stdout** — `import pygame` prints a line to stdout unless `PYGAME_HIDE_SUPPORT_PROMPT=1` is set first, which would break the output format (§6.2).
+11. **No display, or no pygame-ce, on the evaluation machine** — `--visual` must fail with one clean line, and a normal run must never import pygame, so the terminal view always works.
+12. **pygame and pygame-ce share the import name** — if plain `pygame` is installed in the same Python, one breaks the other. The venv keeps them apart; `requirements.txt` names only `pygame-ce`.
 
 ---
 
@@ -427,7 +569,7 @@ Mandatory (VII.1 asks for drone movements **and zone states**). Start simple, up
 | What is the complexity? | §3, and be able to derive it, the way you did for BFS. |
 | Are you recalculating or caching paths? | Each route is planned once, before the run; the distance table is computed once; the simulator never replans. |
 | How does it impact memory usage? | `O(n · T)` for the routes; a waiting turn is one list entry. |
-| How does your visual representation enhance understanding? | Zone states and drones in flight show *why* a drone waits, which the movement lines alone can't show. |
+| How does your visual representation enhance understanding? | Zone states and drones in flight show *why* a drone waits, which the movement lines alone can't show. In the window (7b): the 2-turn flight stopping halfway along the link, the hollow slot reserved in its destination, the links used each turn with `load/cap`, and a drone dimmed while it waits for a full zone. Pause and step through the turns to show it. |
 | Can it meet the performance benchmarks? | The table in §3. |
 | What optimizations did you implement? | Tie-break, second pass, goal direction, search window. Say what each one changed. |
 | Can you beat the 45-turn record? | 43, and why it can't go lower (§9). |
@@ -452,6 +594,7 @@ Time yourself: each should take a few minutes.
 - Change the tie-break: prefer the highest drone id, or ignore priority zones.
 - Add a metric to `show_summary`.
 - Store new information on `Drone` and display it.
+- In the window (7b): change the turn duration or the default speed, color drones by state instead of by id, show the turn number on the map, add a key that hides blocked zones.
 
 ### Review of the code Claude wrote (5.7 to Step 7)
 
@@ -473,6 +616,7 @@ Work top to bottom. For each item: read it, explain it out loud, then do the "tr
 - [ ] **8. Tests:** `test_referee.py` (the `Referee` class, then the map table), `test_space_time.py` (table tests, planner tests, and `test_every_drone_arrives_when_planned`: why it exists), `test_terminal.py` (the exact state lines, the fake terminal), and the small additions in `test_network.py`, `test_simulator.py`, `test_scheduler.py`, `test_smoke.py`.
 - [ ] **9. Edge maps:** read each `maps/edge_*.map` comment and redo the count by hand (3, 5, 7, 2, 501).
 - [ ] **10. Makefile:** the `test` rule and the comment.
+- [ ] **11. Step 8 code:** in `main.py`, the three `except` branches (why the printing moved inside the `try`, why `os.dup2` instead of just returning). In `parser.py`, `_strict_int` and `utf-8-sig`. Try: remove `digits.isascii() and` from `_strict_int` → `test_nb_drones_needs_plain_digits[٣]` fails, because `'٣'.isdigit()` is True and `int('٣')` is 3.
 
 Choices you may want to change (decisions, not rules):
 

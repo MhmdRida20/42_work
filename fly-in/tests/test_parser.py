@@ -100,6 +100,58 @@ def test_non_utf8_file_raises_parse_error(tmp_path: Path) -> None:
         Parser().parse_file(str(map_file))
 
 
+@pytest.mark.parametrize("value", ["1_0", "+3", "٣", "3.0"])
+def test_nb_drones_needs_plain_digits(value: str) -> None:
+    """int() accepts 1_0, +3 and Arabic digits; a map number may not."""
+    with pytest.raises(ParseError, match="line 1"):
+        Parser().parse_lines(
+            [
+                f"nb_drones: {value}\n",
+                "start_hub: a 0 0\n",
+                "end_hub: b 1 0\n",
+                "connection: a-b\n",
+            ]
+        )
+
+
+def test_coordinates_need_plain_digits() -> None:
+    """A coordinate written 1_0 is rejected like any other non-integer."""
+    with pytest.raises(ParseError, match="coordinates must be integers"):
+        Parser().parse_lines(
+            [
+                "nb_drones: 1\n",
+                "start_hub: a 1_0 0\n",
+                "end_hub: b 1 0\n",
+                "connection: a-b\n",
+            ]
+        )
+
+
+def test_negative_coordinates_are_integers() -> None:
+    """Coordinates can be negative: -2 is still an integer."""
+    network, _ = Parser().parse_lines(
+        [
+            "nb_drones: 1\n",
+            "start_hub: a -2 -3\n",
+            "end_hub: b 1 0\n",
+            "connection: a-b\n",
+        ]
+    )
+    assert (network.start.x, network.start.y) == (-2, -3)
+
+
+def test_file_with_byte_order_mark_parses(tmp_path: Path) -> None:
+    """A UTF-8 file saved with a byte-order mark reads normally."""
+    map_file = tmp_path / "bom.map"
+    map_file.write_bytes(
+        b"\xef\xbb\xbfnb_drones: 1\nstart_hub: a 0 0\nend_hub: b 1 0\n"
+        b"connection: a-b\n"
+    )
+
+    _, nb_drones = Parser().parse_file(str(map_file))
+    assert nb_drones == 1
+
+
 def test_blocked_start_zone_raises() -> None:
     """Drones can't begin inside a blocked zone."""
     with pytest.raises(ParseError, match="line 2"):

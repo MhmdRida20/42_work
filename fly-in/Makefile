@@ -1,5 +1,4 @@
 PYTHON := python3
-PIP := pip
 
 # Map used by `make run` / `make debug`. Override on the CLI, e.g.
 #   make run MAP=maps/easy/01_linear_path.txt
@@ -8,7 +7,7 @@ MAP ?= maps/example.map
 .PHONY: install run debug clean lint lint-strict test
 
 install:
-	$(PIP) install -r requirements.txt
+	$(PYTHON) -m pip install -r requirements.txt
 
 run:
 	$(PYTHON) main.py $(MAP)

@@ -72,6 +72,7 @@ def test_flight_progress_follows_the_entry_cost(
     """If restricted zones cost 3 turns, a flight is at 1/3, then 2/3."""
 
     def three_turns(self: RestrictedZone) -> int:
+        """Stand in for RestrictedZone.entry_cost: 3 turns, not 2."""
         return 3
 
     monkeypatch.setattr(RestrictedZone, "entry_cost", property(three_turns))

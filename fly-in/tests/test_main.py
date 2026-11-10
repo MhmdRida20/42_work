@@ -28,6 +28,7 @@ def test_ctrl_c_stops_without_a_traceback(
     def interrupted(
         self: Simulator, visualizer: Visualizer | None = None
     ) -> list[str]:
+        """Stand in for Simulator.run: Ctrl+C during the run."""
         raise KeyboardInterrupt
 
     monkeypatch.setattr(Simulator, "run", interrupted)
@@ -49,6 +50,7 @@ def test_closed_pipe_stops_quietly(
     def closed_pipe(
         self: Simulator, visualizer: Visualizer | None = None
     ) -> list[str]:
+        """Stand in for Simulator.run: the reader closed the pipe."""
         raise BrokenPipeError
 
     redirected: list[int] = []

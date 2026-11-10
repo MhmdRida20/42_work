@@ -61,9 +61,9 @@ class Layout:
         scale_x = self._scale(span_x, area_width)
         scale_y = self._scale(span_y, area_height)
         # A zone's radius is 28% of a grid step, kept between 10 and
-        # 26 px; a drone is a third of a zone, at least 5 px.
+        # 26 px; a drone is a third of a zone, at least 7 px (its id fits).
         self.zone_radius = min(max(0.28 * min(scale_x, scale_y), 10.0), 26.0)
-        self.drone_radius = max(5.0, self.zone_radius // 3)
+        self.drone_radius = max(7.0, self.zone_radius // 3)
         # A map smaller than the area is centered in it.
         left = MARGIN + (area_width - span_x * scale_x) / 2
         top = TOP_BAR + MARGIN + (area_height - span_y * scale_y) / 2

@@ -93,7 +93,7 @@ def test_zone_radius_stays_between_10_and_26() -> None:
 
     One row: 160 px steps give 44.8, cut to 26. The Challenger:
     1160/23 px steps give about 14.1. 40 units across: 29 px steps
-    give 8.1, raised to 10. A drone is never under 5 px.
+    give 8.1, raised to 10. A drone is never under 7 px, so its id fits.
     """
     row = _from_file("maps/easy/01_linear_path.txt")
     challenger = _from_file("maps/challenger/01_the_impossible_dream.txt")
@@ -101,8 +101,8 @@ def test_zone_radius_stays_between_10_and_26() -> None:
 
     assert (row.zone_radius, row.drone_radius) == (26, 8)
     assert challenger.zone_radius == pytest.approx(0.28 * 1160 / 23)
-    assert challenger.drone_radius == 5
-    assert (wide.zone_radius, wide.drone_radius) == (10, 5)
+    assert challenger.drone_radius == 7
+    assert (wide.zone_radius, wide.drone_radius) == (10, 7)
 
 
 def test_a_resized_window_gets_a_new_layout() -> None:

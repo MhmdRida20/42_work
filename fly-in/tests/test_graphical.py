@@ -23,6 +23,7 @@ from simulation.simulator import Simulator
 from visualization.frames import Frame, Pose, Recorder
 from visualization.graphical import (
     BACKGROUND,
+    BAR,
     BLOCKED,
     CROSS,
     ELLIPSIS,
@@ -30,6 +31,7 @@ from visualization.graphical import (
     LINK,
     NO_COLOR,
     OUTLINE,
+    PANEL,
     WHITE,
     SceneRenderer,
 )
@@ -37,6 +39,7 @@ from visualization.layout import Layout, Point
 from visualization.playback import Playback
 
 RESTRICTED_END = "maps/edge_restricted_end.map"
+CHALLENGER = "maps/challenger/01_the_impossible_dream.txt"
 # Every map with a solution, as in test_referee.py.
 MAPS = [
     "maps/example.map",
@@ -67,9 +70,12 @@ def _replay(map_path: str) -> tuple[Playback, Layout, SceneRenderer]:
     drones = Scheduler().assign(network, routes, nb_drones)
     recorder = Recorder()
     recorder.show_network(network)
-    Simulator(network, drones).run(recorder)
+    simulator = Simulator(network, drones)
+    simulator.run(recorder)
+    recorder.show_summary(simulator.metrics())
     layout = Layout(network, 1280, 800)
-    return Playback(recorder.frames), layout, SceneRenderer(network)
+    renderer = SceneRenderer(network, map_path, recorder.metrics)
+    return Playback(recorder.frames), layout, renderer
 
 
 def _draw(
@@ -121,7 +127,9 @@ def test_every_map_draws_at_every_moment(map_path: str) -> None:
     """Each turn draws halfway through and at its end.
 
     Before the first turn no drone is drawn, so each zone's centre
-    shows its fill, or the cross of a blocked zone.
+    shows its fill, or the cross of a blocked zone. Then the legend is
+    on, the mouse is over a drone (or the start, when no drone is in
+    play), and the last moment shows the summary.
     """
     playback, layout, renderer = _replay(map_path)
     surface = _draw(renderer, layout, playback, 0)
@@ -130,10 +138,14 @@ def test_every_map_draws_at_every_moment(map_path: str) -> None:
         expected = fill if zone.is_accessible else pygame.Color(CROSS)
         assert _at(surface, layout.centers[zone.name]) == expected
 
+    renderer.show_legend = True
+    start = layout.centers[renderer.network.start.name]
     for turn in range(1, playback.last + 1):
         for time in (turn - 0.5, turn):
             playback.time = time
-            renderer.draw(surface, layout, playback)
+            drones = list(playback.positions(layout).values())
+            mouse = drones[0] if drones else start
+            renderer.draw(surface, layout, playback, mouse)
 
 
 def test_zone_colors_come_from_the_map() -> None:
@@ -380,3 +392,206 @@ def test_names_can_be_turned_off() -> None:
     assert pygame.image.tobytes(named, "RGB") != pygame.image.tobytes(
         unnamed, "RGB"
     )
+
+
+def test_the_top_bar_shows_the_turn_the_state_and_the_speed() -> None:
+    """Playing at first, then paused at x2, then done at x0.25."""
+    playback, layout, renderer = _replay(RESTRICTED_END)
+    assert renderer.bar_texts(layout, playback)[:3] == (
+        RESTRICTED_END,
+        "Turn 0 / 5",
+        "playing x1",
+    )
+    playback.toggle()
+    playback.faster()
+    playback.time = 2.5
+    assert renderer.bar_texts(layout, playback)[1:3] == (
+        "Turn 3 / 5",
+        "paused x2",
+    )
+    playback.seek(5)
+    for _ in range(3):
+        playback.slower()
+    assert renderer.bar_texts(layout, playback)[2] == "done x0.25"
+
+
+def test_the_bottom_bar_shows_the_line_of_the_turn_on_screen() -> None:
+    """Nothing before turn 1, then each turn's line while it plays."""
+    playback, layout, renderer = _replay(RESTRICTED_END)
+    lines = []
+    for time in (0, 1.5, 2, 2.5):
+        playback.time = time
+        lines.append(renderer.bar_texts(layout, playback)[3])
+    assert lines == ["", "D1-a-e D2-a", "D1-a-e D2-a", "D1-e"]
+
+
+def test_a_long_line_is_cut_to_the_window() -> None:
+    """The Challenger's turn 25 is 417 characters long: 2326 px."""
+    playback, layout, renderer = _replay(CHALLENGER)
+    playback.time = 25
+    whole = playback.frames[25].line
+    cut = renderer.bar_texts(layout, playback)[3]
+    wide = Layout(renderer.network, 2560, 1600)
+
+    assert cut.endswith(ELLIPSIS)
+    assert whole.startswith(cut.removesuffix(ELLIPSIS))
+    assert renderer.bar_texts(wide, playback)[3] == whole
+
+
+def test_a_zone_tooltip_shows_its_kind_count_and_drones() -> None:
+    """After turn 2: D2 is inside a, and D1 flies into the end.
+
+    After turn 3 D1 rests in the end: its counter says so, not a line.
+    """
+    playback, _, renderer = _replay(RESTRICTED_END)
+    playback.time = 2.5
+    zones = renderer.network.zones
+
+    assert renderer.zone_lines(zones["s"], playback) == [
+        "s",
+        "start, normal",
+        "0 waiting",
+    ]
+    assert renderer.zone_lines(zones["a"], playback) == [
+        "a",
+        "normal",
+        "used: 1/1",
+        "inside: D2",
+    ]
+    assert renderer.zone_lines(zones["e"], playback) == [
+        "e",
+        "end, restricted, 2 turns to enter",
+        "0/2 delivered",
+        "flying in: D1",
+    ]
+    playback.time = 3
+    assert renderer.zone_lines(zones["e"], playback) == [
+        "e",
+        "end, restricted, 2 turns to enter",
+        "1/2 delivered",
+    ]
+
+
+def test_a_blocked_zone_tooltip_says_it_is_never_entered() -> None:
+    """obstacleX has no count and no drones."""
+    playback, _, renderer = _replay("maps/example.map")
+    obstacle = renderer.network.zones["obstacleX"]
+    assert renderer.zone_lines(obstacle, playback) == [
+        "obstacleX",
+        "blocked, never entered",
+    ]
+
+
+def test_a_drone_tooltip_says_what_it_does_this_turn() -> None:
+    """Turn 2: D1 takes off for e and D2 moves to a; turn 3: D2 waits."""
+    playback, _, renderer = _replay(RESTRICTED_END)
+    playback.time = 2
+    assert renderer.drone_lines(1, playback) == ["D1", "flying to e on a-e"]
+    assert renderer.drone_lines(2, playback) == ["D2", "moving to a"]
+    playback.time = 3
+    assert renderer.drone_lines(2, playback) == ["D2", "waiting in a"]
+
+
+def test_the_tooltip_is_about_what_is_under_the_mouse() -> None:
+    """A drone over its zone wins; nothing under the mouse, no tooltip.
+
+    The start is a quarter bigger than a: 30 px from its centre is in.
+    """
+    playback, layout, renderer = _replay(RESTRICTED_END)
+    playback.time = 2
+
+    assert renderer.tooltip(layout, playback, (720, 390))[0] == "D1"
+    assert renderer.tooltip(layout, playback, (640, 390))[0] == "D2"
+    assert renderer.tooltip(layout, playback, (640, 410))[0] == "a"
+    assert renderer.tooltip(layout, playback, (510, 390))[0] == "s"
+    assert renderer.tooltip(layout, playback, (100, 100)) == []
+
+
+def test_the_drone_drawn_on_top_gets_the_tooltip() -> None:
+    """a holds 9 but shows 8 places: D9 is drawn over D1, at the top."""
+    network, _ = Parser().parse_lines(
+        [
+            "nb_drones: 9",
+            "start_hub: s 0 0",
+            "hub: a 1 0 [max_drones=9]",
+            "end_hub: e 2 0",
+            "connection: s-a [max_link_capacity=9]",
+            "connection: a-e",
+        ]
+    )
+    poses = {drone: Pose("a") for drone in range(1, 10)}
+    frames = [Frame(0, "", {}, 9, 0, {}), Frame(1, "", poses, 0, 0, {})]
+    playback = Playback(frames)
+    playback.seek(1)
+    layout = Layout(network, 1280, 800)
+    renderer = SceneRenderer(network)
+    top_place = layout.slot("a", 0)
+
+    assert renderer.tooltip(layout, playback, top_place)[0] == "D9"
+
+
+def test_the_summary_lists_the_metrics_of_the_run() -> None:
+    """Whole numbers without decimals, the others with two."""
+    _, _, renderer = _replay(RESTRICTED_END)
+    assert renderer.summary_lines() == [
+        "Run complete",
+        "turns: 5",
+        "drones moved per turn: 1.20",
+        "average turns per drone: 4",
+        "total path cost: 6",
+    ]
+
+
+def test_the_bars_frame_the_map() -> None:
+    """The top 40 px and the bottom 60 px are bars; the map is between."""
+    playback, layout, renderer = _replay(RESTRICTED_END)
+    surface = _draw(renderer, layout, playback, 0)
+    bar, background = pygame.Color(BAR), pygame.Color(BACKGROUND)
+
+    assert _at(surface, (2, 2)) == bar
+    assert _at(surface, (2, 797)) == bar
+    assert _at(surface, (2, 400)) == background
+
+
+def test_the_panels_show_only_when_they_should() -> None:
+    """The legend when asked, the summary on the last turn only.
+
+    The legend's point is 5 px in from its bottom-right corner; the
+    summary's point is 4 px into its top edge, in the middle.
+    """
+    playback, layout, renderer = _replay(RESTRICTED_END)
+    legend, summary = (1267, 727), (640, 52)
+    panel, background = pygame.Color(PANEL), pygame.Color(BACKGROUND)
+
+    surface = _draw(renderer, layout, playback, 4.5)
+    assert (_at(surface, legend), _at(surface, summary)) == (
+        background,
+        background,
+    )
+    renderer.show_legend = True
+    surface = _draw(renderer, layout, playback, 5)
+    assert (_at(surface, legend), _at(surface, summary)) == (panel, panel)
+    renderer.metrics = {}
+    assert _at(_draw(renderer, layout, playback, 5), summary) == background
+
+
+def test_a_tooltip_is_drawn_next_to_the_mouse_inside_the_window() -> None:
+    """16 px right of and below the mouse, but never past an edge.
+
+    On the Challenger the end is 60 px from the right edge: its
+    tooltip is moved left, over the point 5 px left of where it
+    would have started.
+    """
+    playback, layout, renderer = _replay(RESTRICTED_END)
+    panel = pygame.Color(PANEL)
+    surface = pygame.Surface((1280, 800))
+    playback.time = 2
+    renderer.draw(surface, layout, playback, (720, 390))
+    assert _at(surface, (738, 408)) == panel
+    assert _at(surface, (733, 403)) == pygame.Color(BACKGROUND)
+    renderer.draw(surface, layout, playback, (100, 100))
+    assert _at(surface, (118, 118)) == pygame.Color(BACKGROUND)
+
+    playback, layout, renderer = _replay(CHALLENGER)
+    renderer.draw(surface, layout, playback, (1220, 390))
+    assert _at(surface, (1231, 412)) == panel

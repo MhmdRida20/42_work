@@ -1,10 +1,12 @@
 """Graphical view: draw one moment of the replay with pygame-ce.
 
-The SceneRenderer draws the map: links under zones under drones. The
-moment comes from a Playback and the pixels from a Layout, so the
-window shows exactly what the recorded frames say. The picture is
-drawn again from nothing each time; only the text, the slow part, is
-kept from one picture to the next.
+The SceneRenderer draws the map (links under zones under drones), then
+the two bars around it, then the panels on top: the legend, the
+summary at the end of the run and the tooltip. The moment comes from a
+Playback and the pixels from a Layout, so the window shows exactly
+what the recorded frames say. The picture is drawn again from nothing
+each time; only the text, the slow part, is kept from one picture to
+the next.
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ from models.connection import Connection
 from models.network import Network
 from models.zone import PriorityZone, RestrictedZone, Zone
 from visualization.frames import Frame
-from visualization.layout import MAX_SLOTS, Layout, Point
+from visualization.layout import BOTTOM_BAR, MAX_SLOTS, TOP_BAR, Layout, Point
 from visualization.playback import Playback
 
 # Importing pygame prints a banner to stdout, where the movement lines
@@ -36,14 +38,36 @@ BLOCKED: RGB = (62, 64, 70)
 CROSS: RGB = (140, 142, 150)
 NO_COLOR: RGB = (150, 150, 150)
 WHITE: RGB = (255, 255, 255)
+BAR: RGB = (16, 18, 23)
+PANEL: RGB = (36, 39, 48)
 
 NAME_SIZE = 16
 SMALL_SIZE = 14
+# The space between a panel's or a bar's edge and its text.
+PAD = 8
 # The one-character "...", written as an escape to keep the file ASCII.
 ELLIPSIS = "\u2026"
 # Each drone id turns the hue by the golden ratio of a full turn, so
 # drones with neighbouring ids get clearly different colors.
 GOLDEN = 0.6180339887
+
+HINTS = (
+    "Space play/pause   Left/Right step   Up/Down speed   "
+    "Home/End first/last   R restart   N names   L legend   Q quit"
+)
+LEGEND = (
+    "S start, E end: counters instead of places",
+    "plain outline: normal zone",
+    "double outline, P: priority zone",
+    "dashed outline, 2: restricted, 2 turns to enter",
+    "crossed out: blocked zone, never entered",
+    "dark hole: a free place",
+    "white ring in a zone: a reserved place",
+    "used/max: drones inside or flying in",
+    "dimmed drone: it waited this turn",
+    "white ring on a drone: it is on a link",
+    "glowing link: used this turn, load/capacity",
+)
 
 
 class SceneRenderer:
@@ -51,27 +75,45 @@ class SceneRenderer:
 
     Attributes:
         network: The network drawn.
+        title: What the top bar starts with, such as the map's path.
+        metrics: The run's metrics, shown when the replay is over.
         show_names: Whether zone names are written (the N key).
+        show_legend: Whether the legend is shown (the L key).
     """
 
-    def __init__(self, network: Network) -> None:
+    def __init__(
+        self,
+        network: Network,
+        title: str = "",
+        metrics: dict[str, float] | None = None,
+    ) -> None:
         """Start pygame's fonts; each font and text is made when needed.
 
         Args:
             network: The parsed network.
+            title: What the top bar starts with.
+            metrics: The metrics of the run, as the simulator gave them.
         """
         pygame.font.init()
         self.network = network
+        self.title = title
+        self.metrics = dict(metrics or {})
         self.show_names = True
+        self.show_legend = False
         self._fonts: dict[int, pygame.font.Font] = {}
         self._texts: dict[tuple[str, int, RGB, RGB], pygame.Surface] = {}
+        self._fits: dict[tuple[str, float], str] = {}
         self._names: dict[str, str] = {}
         self._names_for: Layout | None = None
 
     def draw(
-        self, surface: pygame.Surface, layout: Layout, playback: Playback
+        self,
+        surface: pygame.Surface,
+        layout: Layout,
+        playback: Playback,
+        mouse: Point | None = None,
     ) -> None:
-        """Draw the map at the moment ``playback`` is at.
+        """Draw the moment ``playback`` is at.
 
         The links glow for the turn on screen; the places and the
         counts show the last turn that is over.
@@ -80,6 +122,7 @@ class SceneRenderer:
             surface: Where to draw, as big as the layout's window.
             layout: The layout of that window.
             playback: The replay clock and its frames.
+            mouse: Where the mouse is, for the tooltip; None for none.
         """
         surface.fill(BACKGROUND)
         shown = playback.frames[playback.turn]
@@ -91,6 +134,18 @@ class SceneRenderer:
             self._draw_places(surface, layout, zone, playback.settled)
             self._draw_labels(surface, layout, zone, playback)
         self._draw_drones(surface, layout, playback)
+        self._draw_bars(surface, layout, playback)
+        if self.show_legend:
+            corner = (layout.width - PAD, layout.height - BOTTOM_BAR - PAD)
+            self._draw_panel(surface, list(LEGEND), bottomright=corner)
+        if self.metrics and playback.time == playback.last:
+            top = (layout.width / 2, TOP_BAR + PAD)
+            self._draw_panel(surface, self.summary_lines(), midtop=top)
+        if mouse is not None:
+            lines = self.tooltip(layout, playback, mouse)
+            if lines:
+                below = (mouse[0] + 16, mouse[1] + 16)
+                self._draw_panel(surface, lines, topleft=below)
 
     def count_text(self, zone: Zone, playback: Playback) -> str:
         """Return the line under a zone's name, for the last turn over.
@@ -141,6 +196,104 @@ class SceneRenderer:
         if isinstance(zone, RestrictedZone):
             return str(zone.entry_cost)
         return ""
+
+    def bar_texts(
+        self, layout: Layout, playback: Playback
+    ) -> tuple[str, str, str, str]:
+        """Return the texts of the bars: title, turn, state, line.
+
+        The line is the movement line of the turn on screen, exactly
+        as printed, cut with an ellipsis if wider than the window.
+        """
+        if playback.playing:
+            state = "playing"
+        elif playback.time == playback.last:
+            state = "done"
+        else:
+            state = "paused"
+        line = playback.frames[playback.turn].line
+        return (
+            self.title,
+            f"Turn {playback.turn} / {playback.last}",
+            f"{state} x{playback.speed:g}",
+            self._fit(line, layout.width - 2 * PAD),
+        )
+
+    def zone_lines(self, zone: Zone, playback: Playback) -> list[str]:
+        """Return a zone's tooltip: its name, kind, count and drones.
+
+        Like the counts, it shows the last turn that is over.
+        """
+        kind = type(zone).__name__.removesuffix("Zone").lower()
+        if zone is self.network.start:
+            kind = "start, " + kind
+        elif zone is self.network.end:
+            kind = "end, " + kind
+        if not zone.is_accessible:
+            kind += ", never entered"
+        elif zone.entry_cost > 1:
+            kind += f", {zone.entry_cost} turns to enter"
+        lines = [zone.name, kind]
+        count = self.count_text(zone, playback)
+        if count:
+            lines.append(count if zone.unlimited else f"used: {count}")
+        here = [
+            (drone, pose)
+            for drone, pose in sorted(playback.settled.poses.items())
+            if pose.zone == zone.name
+        ]
+        inside = [f"D{drone}" for drone, pose in here if pose.link is None]
+        coming = [f"D{drone}" for drone, pose in here if pose.link is not None]
+        # Drones resting in the start or the end are in its counter.
+        if inside and not zone.unlimited:
+            lines.append("inside: " + " ".join(inside))
+        if coming:
+            lines.append("flying in: " + " ".join(coming))
+        return lines
+
+    def drone_lines(self, drone: int, playback: Playback) -> list[str]:
+        """Return a drone's tooltip: its id and what it does this turn."""
+        pose = playback.frames[playback.turn].poses[drone]
+        before = playback.frames[playback.turn - 1].poses.get(drone)
+        if pose.link is not None:
+            doing = f"flying to {pose.zone} on {pose.link}"
+        elif before == pose:
+            doing = f"waiting in {pose.zone}"
+        else:
+            doing = f"moving to {pose.zone}"
+        return [f"D{drone}", doing]
+
+    def tooltip(
+        self, layout: Layout, playback: Playback, mouse: Point
+    ) -> list[str]:
+        """Return the tooltip of what is under ``mouse``, or [] if none.
+
+        Drones are drawn over zones, so they are looked at first, the
+        last one drawn, which is on top, first of all.
+        """
+        positions = playback.positions(layout)
+        for drone in reversed(positions):
+            if math.dist(positions[drone], mouse) <= layout.drone_radius:
+                return self.drone_lines(drone, playback)
+        for zone in self.network.zones.values():
+            center = layout.centers[zone.name]
+            if math.dist(center, mouse) <= self._radius(layout, zone):
+                return self.zone_lines(zone, playback)
+        return []
+
+    def summary_lines(self) -> list[str]:
+        """Return the panel shown when the replay is over.
+
+        The metrics are written as in the terminal: whole numbers
+        without decimals, the others with two.
+        """
+        lines = ["Run complete"]
+        for name, value in self.metrics.items():
+            if float(value).is_integer():
+                lines.append(f"{name}: {int(value)}")
+            else:
+                lines.append(f"{name}: {value:.2f}")
+        return lines
 
     @staticmethod
     def zone_color(zone: Zone, time: float) -> pygame.Color:
@@ -319,6 +472,51 @@ class SceneRenderer:
             size = round(2 * radius)
             self._write(surface, str(drone), size, BACKGROUND, box, point)
 
+    def _draw_bars(
+        self, surface: pygame.Surface, layout: Layout, playback: Playback
+    ) -> None:
+        """Draw the top bar and the bottom bar, with their texts.
+
+        Top: the title on the left, the turn in the middle and the
+        state on the right. Bottom: the movement line, then the keys.
+        """
+        width, height = layout.width, layout.height
+        bottom = height - BOTTOM_BAR
+        pygame.draw.rect(surface, BAR, (0, 0, width, TOP_BAR))
+        pygame.draw.rect(surface, BAR, (0, bottom, width, BOTTOM_BAR))
+        title, turn, state, line = self.bar_texts(layout, playback)
+        middle = TOP_BAR / 2
+        image = self._text(title, NAME_SIZE, TEXT, BAR)
+        surface.blit(image, image.get_rect(midleft=(PAD, middle)))
+        self._write(surface, turn, NAME_SIZE, TEXT, BAR, (width / 2, middle))
+        image = self._text(state, NAME_SIZE, MUTED, BAR)
+        surface.blit(image, image.get_rect(midright=(width - PAD, middle)))
+        image = self._text(line, NAME_SIZE, TEXT, BAR)
+        surface.blit(image, image.get_rect(midleft=(PAD, bottom + 18)))
+        image = self._text(HINTS, SMALL_SIZE, MUTED, BAR)
+        surface.blit(image, image.get_rect(midleft=(PAD, bottom + 42)))
+
+    def _draw_panel(
+        self, surface: pygame.Surface, lines: list[str], **anchor: Point
+    ) -> None:
+        """Draw ``lines`` on a framed panel, placed by ``anchor``.
+
+        ``anchor`` is one point of the panel, such as ``topleft=(x, y)``.
+        A panel that would cross an edge of the window is moved in.
+        """
+        images = [self._text(line, SMALL_SIZE, TEXT, PANEL) for line in lines]
+        width = max(image.get_width() for image in images) + 2 * PAD
+        height = sum(image.get_height() for image in images) + 2 * PAD
+        panel = pygame.Surface((width, height))
+        panel.fill(PANEL)
+        y = PAD
+        for image in images:
+            panel.blit(image, (PAD, y))
+            y += image.get_height()
+        place = panel.get_rect(**anchor).clamp(surface.get_rect())
+        surface.blit(panel, place)
+        pygame.draw.rect(surface, LINK, place, 1)
+
     @staticmethod
     def _draw_dashes(
         surface: pygame.Surface, center: Point, radius: float
@@ -352,13 +550,21 @@ class SceneRenderer:
         return nearest - 8
 
     def _fit(self, text: str, room: float) -> str:
-        """Return ``text``, cut with an ellipsis if wider than ``room``."""
-        font = self._font(NAME_SIZE)
-        if font.size(text)[0] <= room:
-            return text
-        while len(text) > 1 and font.size(text + ELLIPSIS)[0] > room:
-            text = text[:-1]
-        return text + ELLIPSIS
+        """Return ``text``, cut with an ellipsis if wider than ``room``.
+
+        A cut text is kept, like a drawn one: cutting a long movement
+        line one letter at a time takes about 18 ms.
+        """
+        key = (text, room)
+        if key not in self._fits:
+            font = self._font(NAME_SIZE)
+            cut = text
+            if font.size(cut)[0] > room:
+                while len(cut) > 1 and font.size(cut + ELLIPSIS)[0] > room:
+                    cut = cut[:-1]
+                cut += ELLIPSIS
+            self._fits[key] = cut
+        return self._fits[key]
 
     def _write(
         self,

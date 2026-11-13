@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 
@@ -11,6 +12,7 @@ from pathfinding.space_time import SpaceTimeFinder
 from simulation.scheduler import Scheduler
 from simulation.simulator import Simulator
 from visualization.terminal import TerminalVisualizer
+from visualization.visualizer import Visualizer, VisualizerGroup
 
 
 def main(argv: list[str]) -> int:
@@ -19,33 +21,54 @@ def main(argv: list[str]) -> int:
     On a terminal, the run is shown with colors, zone states and the
     secondary metrics. Piped or redirected, only the movement lines are
     printed, exactly in the subject's format, so a checker can read
-    them.
+    them. With ``--visual``, a window then replays the run.
 
     Args:
-        argv: Process arguments; ``argv[1]`` is the map file path.
+        argv: Process arguments: the map file path and, optionally,
+            ``--visual`` follow the program's name.
 
     Returns:
         Exit code: 0 on success, 1 on any handled error, 130 when
-        stopped with Ctrl+C.
+        stopped with Ctrl+C. Wrong arguments never return: argparse
+        prints the usage and exits with 2.
     """
-    if len(argv) < 2:
-        print("usage: python main.py <map_file>", file=sys.stderr)
-        return 1
+    parser = argparse.ArgumentParser(
+        prog="python main.py",
+        description="Route drones through a network of zones, turn by turn.",
+    )
+    parser.add_argument("map_file", help="the map to solve")
+    parser.add_argument(
+        "--visual",
+        action="store_true",
+        help="replay the run in a window once it is over",
+    )
+    args = parser.parse_args(argv[1:])
 
-    visualizer = TerminalVisualizer() if sys.stdout.isatty() else None
+    on_terminal = sys.stdout.isatty()
     try:
-        network, nb_drones = Parser().parse_file(argv[1])
+        network, nb_drones = Parser().parse_file(args.map_file)
         paths = SpaceTimeFinder(nb_drones).find_paths(network)
         drones = Scheduler().assign(network, paths, nb_drones)
         simulator = Simulator(network, drones)
-        if visualizer is not None:
-            visualizer.show_network(network)
-        lines = simulator.run(visualizer)
-        if visualizer is None:
+        visualizers: list[Visualizer] = []
+        if on_terminal:
+            visualizers.append(TerminalVisualizer())
+        if args.visual:
+            # Imported here only, so a run without --visual never loads
+            # pygame; without pygame, this import is a VisualizationError.
+            from visualization.graphical import GraphicalVisualizer
+            visualizers.append(GraphicalVisualizer(network, args.map_file))
+        # The terminal first: its summary is printed before the window
+        # opens and waits.
+        group = VisualizerGroup(visualizers)
+        group.show_network(network)
+        lines = simulator.run(group)
+        if not on_terminal:
             for line in lines:
                 print(line)
-        else:
-            visualizer.show_summary(simulator.metrics())
+            # Every line reaches the reader before a window opens.
+            sys.stdout.flush()
+        group.show_summary(simulator.metrics())
     except FlyInError as err:
         print(f"error: {err}", file=sys.stderr)
         return 1

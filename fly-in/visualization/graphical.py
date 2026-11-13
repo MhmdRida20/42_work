@@ -1,12 +1,19 @@
-"""Graphical view: draw one moment of the replay with pygame-ce.
+"""Graphical view: replay a run in a pygame-ce window.
 
-The SceneRenderer draws the map (links under zones under drones), then
-the two bars around it, then the panels on top: the legend, the
-summary at the end of the run and the tooltip. The moment comes from a
-Playback and the pixels from a Layout, so the window shows exactly
-what the recorded frames say. The picture is drawn again from nothing
-each time; only the text, the slow part, is kept from one picture to
-the next.
+The SceneRenderer draws one moment: the map (links under zones under
+drones), then the two bars around it, then the panels on top: the
+legend, the summary at the end of the run and the tooltip. The moment
+comes from a Playback and the pixels from a Layout, so the window
+shows exactly what the recorded frames say. The picture is drawn
+again from nothing each time; only the text, the slow part, is kept
+from one picture to the next.
+
+The GraphicalViewer is the window around it: 60 times a second it
+reads the keys and the mouse, moves the replay on and draws a new
+picture, until the window is closed.
+
+The GraphicalVisualizer plugs all this into a run: it records every
+turn like a Recorder, then opens the window when the run is over.
 """
 
 from __future__ import annotations
@@ -17,14 +24,28 @@ import os
 from models.connection import Connection
 from models.network import Network
 from models.zone import PriorityZone, RestrictedZone, Zone
-from visualization.frames import Frame
-from visualization.layout import BOTTOM_BAR, MAX_SLOTS, TOP_BAR, Layout, Point
+from parsing.errors import VisualizationError
+from visualization.frames import Frame, Recorder
+from visualization.layout import (
+    BOTTOM_BAR,
+    DEFAULT_SIZE,
+    MAX_SLOTS,
+    MIN_SIZE,
+    TOP_BAR,
+    Layout,
+    Point,
+)
 from visualization.playback import Playback
 
 # Importing pygame prints a banner to stdout, where the movement lines
 # go. This variable hides it, so it must be set before the import.
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
-import pygame  # noqa: E402
+try:
+    import pygame
+except ImportError as error:
+    raise VisualizationError(
+        "the graphical view needs pygame-ce: run make install"
+    ) from error
 
 RGB = tuple[int, int, int]
 
@@ -50,6 +71,9 @@ ELLIPSIS = "\u2026"
 # Each drone id turns the hue by the golden ratio of a full turn, so
 # drones with neighbouring ids get clearly different colors.
 GOLDEN = 0.6180339887
+# Pictures per second. A picture usually takes under 3 ms to draw,
+# well under the 16.7 ms that 60 per second allow.
+FPS = 60
 
 HINTS = (
     "Space play/pause   Left/Right step   Up/Down speed   "
@@ -599,3 +623,176 @@ class SceneRenderer:
         if size not in self._fonts:
             self._fonts[size] = pygame.font.Font(None, size)
         return self._fonts[size]
+
+
+class GraphicalViewer:
+    """The window that replays a run until it is closed.
+
+    Attributes:
+        network: The network of the run.
+        playback: The replay clock over the run's frames.
+        renderer: What draws each picture.
+        layout: The layout for the window's current size.
+        running: Whether the loop goes on; False closes the window.
+    """
+
+    def __init__(
+        self,
+        network: Network,
+        frames: list[Frame],
+        title: str = "",
+        metrics: dict[str, float] | None = None,
+    ) -> None:
+        """Get the replay ready; the window only opens in :meth:`run`.
+
+        Args:
+            network: The network of the run.
+            frames: The run's frames, as the Recorder kept them.
+            title: What the top bar starts with, such as the map's path.
+            metrics: The run's metrics, shown when the replay is over.
+        """
+        self.network = network
+        self.playback = Playback(frames)
+        self.renderer = SceneRenderer(network, title, metrics)
+        self.layout = Layout(network, *DEFAULT_SIZE)
+        self.running = False
+
+    def run(self) -> None:
+        """Open the window and replay the run until it is closed.
+
+        ``pygame.quit()`` runs however the loop ends, Ctrl+C included.
+
+        Raises:
+            VisualizationError: If no window can be opened.
+        """
+        try:
+            window = self._open()
+            clock = pygame.time.Clock()
+            self.running = True
+            while self.running:
+                # tick waits until 1/60 s has passed since the last
+                # picture, then returns how long that really was.
+                elapsed = clock.tick(FPS)
+                for event in pygame.event.get():
+                    self.handle(event)
+                self.playback.update(elapsed)
+                mouse = self._mouse()
+                self.renderer.draw(window, self.layout, self.playback, mouse)
+                pygame.display.flip()
+        finally:
+            pygame.quit()
+
+    def handle(self, event: pygame.event.Event) -> None:
+        """React to one event: a key, a new window size, or closing."""
+        if event.type == pygame.QUIT:
+            self.running = False
+        elif event.type == pygame.KEYDOWN:
+            self.press(event.key)
+        elif event.type == pygame.VIDEORESIZE:
+            self.resize(event.w, event.h)
+
+    def press(self, key: int) -> None:
+        """Do what ``key`` does; any other key does nothing.
+
+        Space plays or pauses, the arrows step and change the speed,
+        Home and End jump to the first and the last turn, R restarts,
+        N and L show or hide the names and the legend, Esc and Q close
+        the window.
+        """
+        playback = self.playback
+        if key == pygame.K_SPACE:
+            playback.toggle()
+        elif key == pygame.K_RIGHT:
+            playback.next_turn()
+        elif key == pygame.K_LEFT:
+            playback.previous_turn()
+        elif key == pygame.K_UP:
+            playback.faster()
+        elif key == pygame.K_DOWN:
+            playback.slower()
+        elif key == pygame.K_HOME:
+            playback.seek(0)
+        elif key == pygame.K_END:
+            playback.seek(playback.last)
+        elif key == pygame.K_r:
+            playback.restart()
+        elif key == pygame.K_n:
+            self.renderer.show_names = not self.renderer.show_names
+        elif key == pygame.K_l:
+            self.renderer.show_legend = not self.renderer.show_legend
+        elif key in (pygame.K_ESCAPE, pygame.K_q):
+            self.running = False
+
+    def resize(self, width: int, height: int) -> None:
+        """Lay the map out again for a window of ``width`` x ``height``.
+
+        A window made smaller than the minimum size is set back to it,
+        so the bars and the map always fit.
+        """
+        size = (max(width, MIN_SIZE[0]), max(height, MIN_SIZE[1]))
+        if size != (width, height):
+            pygame.display.set_mode(size, pygame.RESIZABLE)
+        self.layout = Layout(self.network, *size)
+
+    @staticmethod
+    def _open() -> pygame.Surface:
+        """Open the window at the default size and return it.
+
+        Only the display is started: ``pygame.init()`` would also start
+        the sound, which the replay never uses.
+
+        Raises:
+            VisualizationError: If there is no screen to open it on.
+        """
+        try:
+            pygame.display.init()
+            window = pygame.display.set_mode(DEFAULT_SIZE, pygame.RESIZABLE)
+        except pygame.error as error:
+            raise VisualizationError(
+                f"cannot open a window: {error}"
+            ) from error
+        pygame.display.set_caption("Fly-in")
+        return window
+
+    @staticmethod
+    def _mouse() -> Point | None:
+        """Return where the mouse is, or None if it is not over us."""
+        if not pygame.mouse.get_focused():
+            return None
+        return pygame.mouse.get_pos()
+
+
+class GraphicalVisualizer(Recorder):
+    """A Recorder that replays the run in a window once it is over.
+
+    Every turn is recorded exactly as a Recorder does. Only the
+    summary, the last call of a run, does more: it opens the window,
+    and returns once the window is closed.
+
+    Attributes:
+        network: The network of the run, for the window.
+        title: What the top bar starts with, such as the map's path.
+    """
+
+    def __init__(self, network: Network, title: str = "") -> None:
+        """Get ready to record a run on ``network``.
+
+        Args:
+            network: The parsed network.
+            title: What the top bar starts with.
+        """
+        super().__init__()
+        self.network = network
+        self.title = title
+
+    def show_summary(self, metrics: dict[str, float]) -> None:
+        """Keep the metrics, then replay the run until the window closes.
+
+        Raises:
+            VisualizationError: If no window can be opened.
+        """
+        super().show_summary(metrics)
+        viewer = GraphicalViewer(
+            self.network, self.frames, self.title, self.metrics
+        )
+        viewer.run()

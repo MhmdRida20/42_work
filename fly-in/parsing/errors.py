@@ -38,3 +38,7 @@ class NoPathError(FlyInError):
 
 class SimulationError(FlyInError):
     """Raised when a run cannot continue without breaking a rule."""
+
+
+class VisualizationError(FlyInError):
+    """Raised when the graphical view cannot be shown."""

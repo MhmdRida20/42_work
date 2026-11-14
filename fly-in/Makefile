@@ -5,22 +5,22 @@ PYTHON := python3
 #   make run MAP=maps/easy/01_linear_path.txt
 MAP ?= maps/example.map
 
-.PHONY: install run visual debug clean lint lint-strict test
+.PHONY: install run visual debug clean lint lint-strict
 
 install:
 	$(PYTHON) -m pip install -r requirements.txt
 
 run:
-	$(PYTHON) main.py $(MAP)
+	$(PYTHON) main.py "$(MAP)"
 
 visual:
-	$(PYTHON) main.py $(MAP) --visual
+	$(PYTHON) main.py "$(MAP)" --visual
 
 debug:
-	$(PYTHON) -m pdb main.py $(MAP)
+	$(PYTHON) -m pdb main.py "$(MAP)"
 
 clean:
-	rm -rf .mypy_cache .pytest_cache .ruff_cache
+	rm -rf .mypy_cache .ruff_cache
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +
 
 lint:
@@ -32,6 +32,3 @@ lint:
 lint-strict:
 	flake8 .
 	mypy . --strict
-
-test:
-	$(PYTHON) -m pytest -q

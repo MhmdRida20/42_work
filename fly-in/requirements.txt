@@ -1,7 +1,6 @@
 # Development / tooling
 flake8
 mypy
-pytest
 
 # Graphical view (python main.py <map> --visual). pygame-ce, not pygame:
 # pygame has no build for Python 3.14.

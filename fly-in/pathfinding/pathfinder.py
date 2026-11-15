@@ -32,4 +32,3 @@ class PathFinder(ABC):
         Raises:
             NoPathError: If the end zone is unreachable.
         """
-        raise NotImplementedError

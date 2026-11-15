@@ -56,7 +56,6 @@ class Zone(ABC):
     @abstractmethod
     def entry_cost(self) -> int:
         """Number of turns needed to move into this zone."""
-        raise NotImplementedError
 
     @property
     def is_accessible(self) -> bool:
@@ -105,7 +104,7 @@ class BlockedZone(Zone):
     @property
     def entry_cost(self) -> int:
         """Blocked zones cannot be entered."""
-        raise NotImplementedError("blocked zones are inaccessible")
+        raise ValueError("a blocked zone can't be entered")
 
     @property
     def is_accessible(self) -> bool:

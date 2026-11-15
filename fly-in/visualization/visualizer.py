@@ -19,7 +19,6 @@ class Visualizer(ABC):
     @abstractmethod
     def show_network(self, network: Network) -> None:
         """Display the parsed network before the simulation starts."""
-        raise NotImplementedError
 
     @abstractmethod
     def show_turn(self, turn_number: int, line: str, network: Network) -> None:
@@ -30,12 +29,10 @@ class Visualizer(ABC):
             line: The formatted movement line for this turn.
             network: The network, read for where every drone now is.
         """
-        raise NotImplementedError
 
     @abstractmethod
     def show_summary(self, metrics: dict[str, float]) -> None:
         """Display end-of-run metrics (turns, drones/turn, ...)."""
-        raise NotImplementedError
 
 
 class VisualizerGroup(Visualizer):

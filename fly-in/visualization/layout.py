@@ -9,6 +9,7 @@ it is plain arithmetic, tested like the rest of the project.
 
 from __future__ import annotations
 
+import itertools
 import math
 
 from models.connection import Connection
@@ -20,7 +21,7 @@ DEFAULT_SIZE = (1280, 800)
 MIN_SIZE = (800, 560)
 TOP_BAR = 40
 BOTTOM_BAR = 60
-MARGIN = 60
+MARGIN = 70
 MAX_SCALE = 160.0
 MAX_SLOTS = 8
 
@@ -35,7 +36,7 @@ class Layout:
         width: The window width used, at least ``MIN_SIZE[0]``.
         height: The window height used, at least ``MIN_SIZE[1]``.
         zone_radius: The radius of a zone's circle, in pixels.
-        drone_radius: The radius of a drone's disc, in pixels.
+        drone_radius: Half the width of a drone's picture, in pixels.
         centers: Zone name -> the pixel at the center of its circle.
         links: Connection name -> connection.
     """
@@ -53,31 +54,42 @@ class Layout:
         self.height = max(height, MIN_SIZE[1])
         area_width = self.width - 2 * MARGIN
         area_height = self.height - TOP_BAR - BOTTOM_BAR - 2 * MARGIN
-        zones = network.zones.values()
+        zones = list(network.zones.values())
         min_x = min(zone.x for zone in zones)
         max_y = max(zone.y for zone in zones)
         span_x = max(zone.x for zone in zones) - min_x
         span_y = max_y - min(zone.y for zone in zones)
         scale_x = self._scale(span_x, area_width)
         scale_y = self._scale(span_y, area_height)
-        # A zone's radius is 28% of a grid step, kept between 10 and
-        # 26 px; a drone is a third of a zone, at least 7 px (its id fits).
-        self.zone_radius = min(max(0.28 * min(scale_x, scale_y), 10.0), 26.0)
-        self.drone_radius = max(7.0, self.zone_radius // 3)
         # A map smaller than the area is centered in it.
         left = MARGIN + (area_width - span_x * scale_x) / 2
         top = TOP_BAR + MARGIN + (area_height - span_y * scale_y) / 2
+        # y points up: the zone with the highest y is at the top.
+        spots = [
+            (
+                left + (zone.x - min_x) * scale_x,
+                top + (max_y - zone.y) * scale_y,
+            )
+            for zone in zones
+        ]
+        # A zone's radius is 30% of the way to the nearest other zone,
+        # kept between 12 and 30 px; a drone is 60% of a zone, at least
+        # 14 px (its rotors and its id stay readable).
+        gaps = [
+            math.dist(here, there)
+            for here, there in itertools.combinations(set(spots), 2)
+        ]
+        nearest = min(gaps, default=MAX_SCALE)
+        self.zone_radius = min(max(0.3 * nearest, 12.0), 30.0)
+        self.drone_radius = max(14.0, 0.6 * self.zone_radius)
         self.centers: dict[str, Point] = {}
-        on_spot: dict[tuple[int, int], int] = {}
-        for zone in zones:
+        on_spot: dict[Point, int] = {}
+        for zone, (x, y) in zip(zones, spots):
             # The parser accepts zones on the same coordinates: each one
             # after the first moves right by one zone radius.
-            before = on_spot.get((zone.x, zone.y), 0)
-            on_spot[(zone.x, zone.y)] = before + 1
-            x = left + (zone.x - min_x) * scale_x + before * self.zone_radius
-            # y points up: the zone with the highest y is at the top.
-            y = top + (max_y - zone.y) * scale_y
-            self.centers[zone.name] = (x, y)
+            before = on_spot.get((x, y), 0)
+            on_spot[(x, y)] = before + 1
+            self.centers[zone.name] = (x + before * self.zone_radius, y)
         self.links: dict[str, Connection] = {
             connection.name: connection
             for incident in network.adjacency.values()
@@ -97,7 +109,7 @@ class Layout:
             rank: The drone's rank, from 0, among the drones inside.
 
         Returns:
-            The pixel at the center of the drone's disc.
+            The pixel at the center of the drone's picture.
         """
         zone = self.network.zones[name]
         x, y = self.centers[name]
@@ -107,7 +119,7 @@ class Layout:
         # On screen y points down, so angles grow clockwise and -90
         # degrees is the top of the ring.
         angle = 2 * math.pi * rank / places - math.pi / 2
-        ring = 0.55 * self.zone_radius
+        ring = 0.5 * self.zone_radius
         return (x + ring * math.cos(angle), y + ring * math.sin(angle))
 
     def on_link(self, link: str, toward: str, progress: float) -> Point:

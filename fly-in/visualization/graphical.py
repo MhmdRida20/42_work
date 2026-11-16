@@ -2,7 +2,9 @@
 
 The SceneRenderer draws one moment: the map (links under zones under
 drones), then the two bars around it, then the panels on top: the
-legend, the summary at the end of the run and the tooltip. The moment
+legend, the summary at the end of the run and the tooltip. A zone is
+a dark pad inside a ring of its map color, and a drone is a small
+quadcopter seen from above, with its id on its body. The moment
 comes from a Playback and the pixels from a Layout, so the window
 shows exactly what the recorded frames say. The picture is drawn
 again from nothing each time; only the text, the slow part, is kept
@@ -42,53 +44,82 @@ from visualization.playback import Playback
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 try:
     import pygame
+    import pygame.gfxdraw
 except ImportError as error:
     raise VisualizationError(
         "the graphical view needs pygame-ce: run make install"
     ) from error
 
 RGB = tuple[int, int, int]
+RGBA = tuple[int, int, int, int]
 
-BACKGROUND: RGB = (24, 26, 33)
-LINK: RGB = (88, 94, 108)
+BACKGROUND: RGB = (17, 21, 31)
+LINK: RGB = (70, 78, 98)
 GLOW: RGB = (255, 190, 60)
-TEXT: RGB = (222, 226, 234)
-MUTED: RGB = (150, 156, 170)
-OUTLINE: RGB = (235, 238, 245)
-BLOCKED: RGB = (62, 64, 70)
-CROSS: RGB = (140, 142, 150)
+HALO: RGB = (84, 64, 26)
+TEXT: RGB = (226, 231, 240)
+MUTED: RGB = (138, 147, 168)
+OUTLINE: RGB = (226, 231, 240)
+BLOCKED: RGB = (48, 52, 62)
+CROSS: RGB = (124, 129, 142)
 NO_COLOR: RGB = (150, 150, 150)
 WHITE: RGB = (255, 255, 255)
-BAR: RGB = (16, 18, 23)
-PANEL: RGB = (36, 39, 48)
+BAR: RGB = (11, 14, 21)
+PANEL: RGB = (30, 35, 49)
+ACCENT: RGB = (90, 160, 255)
+TRACK: RGB = (34, 40, 55)
+CHIP: RGB = (44, 51, 69)
+SLOT: RGB = (96, 104, 124)
+FRAME: RGB = (150, 158, 176)
 
 NAME_SIZE = 16
 SMALL_SIZE = 14
 # The space between a panel's or a bar's edge and its text.
 PAD = 8
+# How many letters a cut zone name keeps after its ellipsis.
+TAIL = 2
+# The height of the line that fills up at the bottom of the top bar.
+PROGRESS = 4
 # The one-character "...", written as an escape to keep the file ASCII.
 ELLIPSIS = "\u2026"
 # Each drone id turns the hue by the golden ratio of a full turn, so
 # drones with neighbouring ids get clearly different colors.
 GOLDEN = 0.6180339887
-# Pictures per second. A picture usually takes under 3 ms to draw,
+# Pictures per second. A picture usually takes under 5 ms to draw,
 # well under the 16.7 ms that 60 per second allow.
 FPS = 60
+# How far a rotor's blade turns during one turn of the replay, in
+# radians: a bit more than two full turns.
+SPIN = 14.0
+# The slant of a blade that stands still, in radians.
+STILL = 0.6
+# How see-through a rotor's disc is: 0 is invisible, 255 is solid.
+BLUR = 80
+# A zone's inside is its color, mixed this far into the panel color.
+TINT = 0.8
 
-HINTS = (
-    "Space play/pause   Left/Right step   Up/Down speed   "
-    "Home/End first/last   R restart   N names   L legend   Q quit"
+KEYS = (
+    ("Space", "play/pause"),
+    ("Left/Right", "step"),
+    ("Up/Down", "speed"),
+    ("Home/End", "first/last"),
+    ("R", "restart"),
+    ("N", "names"),
+    ("L", "legend"),
+    ("Q", "quit"),
 )
 LEGEND = (
+    "Legend",
     "S start, E end: counters instead of places",
+    "colored ring: a zone, in its map color",
     "plain outline: normal zone",
     "double outline, P: priority zone",
     "dashed outline, 2: restricted, 2 turns to enter",
     "crossed out: blocked zone, never entered",
-    "dark hole: a free place",
+    "grey dot: a place for a drone",
     "white ring in a zone: a reserved place",
     "used/max: drones inside or flying in",
-    "dimmed drone: it waited this turn",
+    "dimmed drone, still blades: it waited this turn",
     "white ring on a drone: it is on a link",
     "glowing link: used this turn, load/capacity",
 )
@@ -126,7 +157,7 @@ class SceneRenderer:
         self.show_legend = False
         self._fonts: dict[int, pygame.font.Font] = {}
         self._texts: dict[tuple[str, int, RGB, RGB], pygame.Surface] = {}
-        self._fits: dict[tuple[str, float], str] = {}
+        self._fits: dict[tuple[str, float, int], str] = {}
         self._names: dict[str, str] = {}
         self._names_for: Layout | None = None
 
@@ -199,7 +230,7 @@ class SceneRenderer:
         """
         if self._names_for is not layout:
             self._names = {
-                each: self._fit(each, self._room(layout, each))
+                each: self._fit(each, self._room(layout, each), TAIL)
                 for each in layout.centers
             }
             self._names_for = layout
@@ -369,6 +400,7 @@ class SceneRenderer:
         if load == 0:
             pygame.draw.line(surface, LINK, start, end, width)
             return
+        pygame.draw.line(surface, HALO, start, end, width + 8)
         pygame.draw.line(surface, GLOW, start, end, width + 2)
         # load/capacity is written beside the middle of the link, off
         # the drone that stops there between the turns of a flight.
@@ -385,15 +417,20 @@ class SceneRenderer:
     def _draw_zone(
         self, surface: pygame.Surface, layout: Layout, zone: Zone, time: float
     ) -> None:
-        """Draw a zone's circle, the outline of its type and its badge."""
+        """Draw a zone: a dark pad inside a ring of its color.
+
+        From the outside in: a light outline (dashed for a restricted
+        zone, doubled for a priority zone), the ring in the zone's
+        color, then the pad. A blocked zone is dark and crossed out.
+        """
         center = layout.centers[zone.name]
         radius = self._radius(layout, zone)
         fill = self.zone_color(zone, time)
-        pygame.draw.circle(surface, fill, center, radius)
         if not zone.is_accessible:
             x, y = center
-            arm = radius * 0.6
-            pygame.draw.circle(surface, CROSS, center, radius, 2)
+            arm = radius * 0.5
+            self._disc(surface, CROSS, center, radius)
+            self._disc(surface, fill, center, radius - 2)
             pygame.draw.line(
                 surface, CROSS, (x - arm, y - arm), (x + arm, y + arm), 3
             )
@@ -401,17 +438,23 @@ class SceneRenderer:
                 surface, CROSS, (x - arm, y + arm), (x + arm, y - arm), 3
             )
             return
+        if isinstance(zone, PriorityZone):
+            self._disc(surface, OUTLINE, center, radius + 6)
+            self._disc(surface, BACKGROUND, center, radius + 4)
         if isinstance(zone, RestrictedZone):
+            self._disc(surface, fill, center, radius - 2)
             self._draw_dashes(surface, center, radius)
         else:
-            pygame.draw.circle(surface, OUTLINE, center, radius, 2)
-        if isinstance(zone, PriorityZone):
-            pygame.draw.circle(surface, OUTLINE, center, radius + 4, 2)
+            self._disc(surface, OUTLINE, center, radius)
+            self._disc(surface, fill, center, radius - 2)
+        band = max(3.0, radius * 0.22)
+        self._disc(surface, fill.lerp(PANEL, TINT), center, radius - 2 - band)
         letter = self.badge(zone)
         if letter:
             spot = (center[0] + radius * 0.8, center[1] - radius * 0.8)
-            size = min(max(7.0, radius * 0.45), 11.0)
-            pygame.draw.circle(surface, OUTLINE, spot, size)
+            size = min(max(7.0, radius * 0.4), 11.0)
+            self._disc(surface, BACKGROUND, spot, size + 2)
+            self._disc(surface, OUTLINE, spot, size)
             self._write(
                 surface, letter, round(size * 1.8), BACKGROUND, OUTLINE, spot
             )
@@ -423,7 +466,7 @@ class SceneRenderer:
         zone: Zone,
         frame: Frame,
     ) -> None:
-        """Draw a zone's places: a hole each, and a ring if reserved.
+        """Draw a zone's places: a dot each, and a ring if reserved.
 
         The start and the end show counters instead, and a blocked
         zone has no places. The drones inside take the first places,
@@ -437,15 +480,14 @@ class SceneRenderer:
         inside = sum(1 for pose in using if pose.link is None)
         places = min(zone.max_drones, MAX_SLOTS)
         if places > 1:
-            # A zone for one drone keeps it at the centre: no hole.
+            # A zone for one drone keeps it at the centre: no dot.
             for rank in range(places):
-                where = layout.slot(zone.name, rank)
-                pygame.draw.circle(
-                    surface, BACKGROUND, where, layout.drone_radius / 2
-                )
+                self._disc(surface, SLOT, layout.slot(zone.name, rank), 3)
         for rank in range(inside, len(using)):
             where = layout.slot(zone.name, rank)
-            pygame.draw.circle(surface, WHITE, where, layout.drone_radius, 2)
+            pygame.draw.circle(
+                surface, WHITE, where, layout.drone_radius / 2, 2
+            )
 
     def _draw_labels(
         self,
@@ -473,8 +515,8 @@ class SceneRenderer:
     ) -> None:
         """Draw the drones in play, each with its id on it.
 
-        A drone that waited this turn is dimmed; a drone on a link has
-        a white ring.
+        A drone that waited this turn is dimmed and its blades stand
+        still; a drone on a link has a white ring.
         """
         positions = playback.positions(layout)
         if not positions:
@@ -484,17 +526,76 @@ class SceneRenderer:
         before = playback.frames[playback.turn - 1].poses
         radius = layout.drone_radius
         for drone, point in positions.items():
-            color = self.drone_color(drone)
-            if before.get(drone) == poses[drone]:
-                # The same pose at both ends of the turn: it waited.
-                color = color.lerp(BACKGROUND, 0.6)
-            pygame.draw.circle(surface, color, point, radius)
+            # The same pose at both ends of the turn: it waited.
+            waited = before.get(drone) == poses[drone]
+            angle = STILL if waited else playback.time * SPIN
+            self._draw_drone(surface, drone, point, radius, waited, angle)
             if poses[drone].link is not None:
-                pygame.draw.circle(surface, WHITE, point, radius + 3, 2)
-            # The id's box has the drone's color: a long id makes a pill.
-            box = (color.r, color.g, color.b)
-            size = round(2 * radius)
-            self._write(surface, str(drone), size, BACKGROUND, box, point)
+                pygame.gfxdraw.aacircle(
+                    surface,
+                    round(point[0]),
+                    round(point[1]),
+                    round(radius + 4),
+                    WHITE,
+                )
+
+    def _draw_drone(
+        self,
+        surface: pygame.Surface,
+        drone: int,
+        point: Point,
+        radius: float,
+        dimmed: bool,
+        angle: float,
+    ) -> None:
+        """Draw one drone seen from above: four rotors around a body.
+
+        Two arms cross under the body, with a rotor at each end: a
+        see-through disc with one blade across it, turned by ``angle``.
+        The body carries the drone's id: a long id makes a pill.
+        """
+        color = self.drone_color(drone)
+        frame = pygame.Color(FRAME)
+        if dimmed:
+            color = color.lerp(BACKGROUND, 0.6)
+            frame = frame.lerp(BACKGROUND, 0.6)
+        x, y = point
+        reach = 0.64 * radius
+        rotor = 0.36 * radius
+        hubs = [
+            (x + side * reach, y + up * reach)
+            for side in (-1, 1)
+            for up in (-1, 1)
+        ]
+        width = max(2, round(radius / 5))
+        pygame.draw.line(surface, frame, hubs[0], hubs[3], width)
+        pygame.draw.line(surface, frame, hubs[1], hubs[2], width)
+        blur = (color.r, color.g, color.b, BLUR)
+        for index, hub in enumerate(hubs):
+            self._disc(surface, BACKGROUND, hub, rotor + 1)
+            self._disc(surface, blur, hub, rotor)
+            pygame.gfxdraw.aacircle(
+                surface, round(hub[0]), round(hub[1]), round(rotor), color
+            )
+            # Rotors on the same arm turn the same way.
+            turn = angle if index in (0, 3) else -angle
+            dx, dy = rotor * math.cos(turn), rotor * math.sin(turn)
+            pygame.draw.aaline(
+                surface,
+                color,
+                (hub[0] - dx, hub[1] - dy),
+                (hub[0] + dx, hub[1] + dy),
+            )
+        box = (color.r, color.g, color.b)
+        image = self._text(str(drone), round(1.1 * radius), BACKGROUND, box)
+        body = image.get_rect().inflate(6, 2)
+        body.width = max(body.width, body.height)
+        body.center = (round(x), round(y))
+        edge = body.inflate(4, 4)
+        # A dark edge sets the body off from the arms under it.
+        pygame.draw.rect(surface, BACKGROUND, edge, border_radius=edge.height)
+        pygame.draw.rect(surface, color, body, border_radius=body.height)
+        surface.blit(image, image.get_rect(center=body.center))
 
     def _draw_bars(
         self, surface: pygame.Surface, layout: Layout, playback: Playback
@@ -502,44 +603,77 @@ class SceneRenderer:
         """Draw the top bar and the bottom bar, with their texts.
 
         Top: the title on the left, the turn in the middle and the
-        state on the right. Bottom: the movement line, then the keys.
+        state on the right, over a line that fills up as the run goes.
+        Bottom: the movement line, then the keys.
         """
         width, height = layout.width, layout.height
         bottom = height - BOTTOM_BAR
         pygame.draw.rect(surface, BAR, (0, 0, width, TOP_BAR))
         pygame.draw.rect(surface, BAR, (0, bottom, width, BOTTOM_BAR))
         title, turn, state, line = self.bar_texts(layout, playback)
-        middle = TOP_BAR / 2
+        middle = (TOP_BAR - PROGRESS) / 2
         image = self._text(title, NAME_SIZE, TEXT, BAR)
         surface.blit(image, image.get_rect(midleft=(PAD, middle)))
         self._write(surface, turn, NAME_SIZE, TEXT, BAR, (width / 2, middle))
         image = self._text(state, NAME_SIZE, MUTED, BAR)
-        surface.blit(image, image.get_rect(midright=(width - PAD, middle)))
+        place = image.get_rect(midright=(width - PAD, middle))
+        surface.blit(image, place)
+        self._draw_state(surface, playback, (place.left - 14, middle))
+        done = playback.time / playback.last if playback.last else 1.0
+        strip = pygame.Rect(0, TOP_BAR - PROGRESS, width, PROGRESS)
+        pygame.draw.rect(surface, TRACK, strip)
+        strip.width = round(width * done)
+        pygame.draw.rect(surface, ACCENT, strip)
         image = self._text(line, NAME_SIZE, TEXT, BAR)
         surface.blit(image, image.get_rect(midleft=(PAD, bottom + 18)))
-        image = self._text(HINTS, SMALL_SIZE, MUTED, BAR)
-        surface.blit(image, image.get_rect(midleft=(PAD, bottom + 42)))
+        x = PAD
+        for key, action in KEYS:
+            image = self._text(key, SMALL_SIZE, TEXT, CHIP)
+            chip = image.get_rect(midleft=(x + 5, bottom + 42)).inflate(10, 6)
+            pygame.draw.rect(surface, CHIP, chip, border_radius=4)
+            surface.blit(image, image.get_rect(center=chip.center))
+            image = self._text(action, SMALL_SIZE, MUTED, BAR)
+            place = image.get_rect(midleft=(chip.right + 5, bottom + 42))
+            surface.blit(image, place)
+            x = place.right + 12
+
+    @staticmethod
+    def _draw_state(
+        surface: pygame.Surface, playback: Playback, center: Point
+    ) -> None:
+        """Draw the sign of the replay's state: a triangle or two bars."""
+        x, y = center
+        if playback.playing:
+            corners = [(x - 5, y - 6), (x - 5, y + 6), (x + 6, y)]
+            pygame.draw.polygon(surface, ACCENT, corners)
+        else:
+            pygame.draw.rect(surface, MUTED, (x - 5, y - 6, 4, 12))
+            pygame.draw.rect(surface, MUTED, (x + 1, y - 6, 4, 12))
 
     def _draw_panel(
         self, surface: pygame.Surface, lines: list[str], **anchor: Point
     ) -> None:
         """Draw ``lines`` on a framed panel, placed by ``anchor``.
 
-        ``anchor`` is one point of the panel, such as ``topleft=(x, y)``.
-        A panel that would cross an edge of the window is moved in.
+        The first line is the panel's title. ``anchor`` is one point
+        of the panel, such as ``topleft=(x, y)``. A panel that would
+        cross an edge of the window is moved in.
         """
-        images = [self._text(line, SMALL_SIZE, TEXT, PANEL) for line in lines]
+        images = [self._text(lines[0], NAME_SIZE, ACCENT, PANEL)]
+        for line in lines[1:]:
+            images.append(self._text(line, SMALL_SIZE, TEXT, PANEL))
         width = max(image.get_width() for image in images) + 2 * PAD
-        height = sum(image.get_height() for image in images) + 2 * PAD
-        panel = pygame.Surface((width, height))
-        panel.fill(PANEL)
-        y = PAD
+        height = sum(image.get_height() + 2 for image in images) + 2 * PAD
+        place = pygame.Rect(0, 0, width, height)
+        for side, point in anchor.items():
+            setattr(place, side, point)
+        place.clamp_ip(surface.get_rect())
+        pygame.draw.rect(surface, PANEL, place, border_radius=8)
+        pygame.draw.rect(surface, LINK, place, 1, border_radius=8)
+        y = place.top + PAD
         for image in images:
-            panel.blit(image, (PAD, y))
-            y += image.get_height()
-        place = panel.get_rect(**anchor).clamp(surface.get_rect())
-        surface.blit(panel, place)
-        pygame.draw.rect(surface, LINK, place, 1)
+            surface.blit(image, (place.left + PAD, y))
+            y += image.get_height() + 2
 
     @staticmethod
     def _draw_dashes(
@@ -551,6 +685,18 @@ class SceneRenderer:
         for dash in range(12):
             start = dash * math.pi / 6
             pygame.draw.arc(surface, OUTLINE, bounds, start, start + 0.3, 2)
+
+    @staticmethod
+    def _disc(
+        surface: pygame.Surface,
+        color: pygame.Color | RGB | RGBA,
+        center: Point,
+        radius: float,
+    ) -> None:
+        """Draw a filled circle with smooth edges."""
+        x, y, size = round(center[0]), round(center[1]), round(radius)
+        pygame.gfxdraw.filled_circle(surface, x, y, size, color)
+        pygame.gfxdraw.aacircle(surface, x, y, size, color)
 
     def _radius(self, layout: Layout, zone: Zone) -> float:
         """Return a zone's radius: the start and the end are bigger."""
@@ -573,20 +719,26 @@ class SceneRenderer:
         )
         return nearest - 8
 
-    def _fit(self, text: str, room: float) -> str:
+    def _fit(self, text: str, room: float, tail: int = 0) -> str:
         """Return ``text``, cut with an ellipsis if wider than ``room``.
 
-        A cut text is kept, like a drawn one: cutting a long movement
-        line one letter at a time takes about 18 ms.
+        The last ``tail`` letters are kept after the ellipsis: zone
+        names often end with the number that tells them apart. A cut
+        text is kept, like a drawn one: cutting a long movement line
+        one letter at a time takes about 18 ms.
         """
-        key = (text, room)
+        key = (text, room, tail)
         if key not in self._fits:
             font = self._font(NAME_SIZE)
             cut = text
             if font.size(cut)[0] > room:
-                while len(cut) > 1 and font.size(cut + ELLIPSIS)[0] > room:
-                    cut = cut[:-1]
-                cut += ELLIPSIS
+                head, end = text[: len(text) - tail], text[len(text) - tail:]
+                while (
+                    len(head) > 1
+                    and font.size(head + ELLIPSIS + end)[0] > room
+                ):
+                    head = head[:-1]
+                cut = head + ELLIPSIS + end
             self._fits[key] = cut
         return self._fits[key]
 
